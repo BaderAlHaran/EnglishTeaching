@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Your Essay Now - English Essay Writing</title>
+    <meta name="description" content="Submit your essay requirements and get a professional essay written by our expert writers. Fast, reliable, and confidential service.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <a href="index.html"><h1 class="nav__logo">English Essay Writing</h1></a>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item">
+                    <a href="index.html" class="nav__link">Home</a>
+                </li>
+                <li class="nav__item">
+                    <a href="index.html#services" class="nav__link">Services</a>
+                </li>
+                <li class="nav__item">
+                    <a href="index.html#process" class="nav__link">Process</a>
+                </li>
+                <li class="nav__item">
+                    <a href="about.html" class="nav__link">About</a>
+                </li>
+                <li class="nav__item">
+                    <a href="index.html#contact" class="nav__link">Contact</a>
+                </li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Form Hero Section -->
+    <section class="form__hero">
+        <div class="container">
+            <div class="form__hero-content">
+                <h1 class="form__hero-title">Get Your Essay Now</h1>
+                <p class="form__hero-description">
+                    Fill out the form below with your essay requirements and we'll match you with the perfect writer for your assignment.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Essay Form Section -->
+    <section class="essay__form-section">
+        <div class="container">
+            <div class="form__container">
+                <form class="essay__form" id="essayForm">
+                    <!-- Personal Information -->
+                    <div class="form__section">
+                        <h3 class="form__section-title">Personal Information</h3>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label for="firstName" class="form__label">First Name *</label>
+                                <input type="text" id="firstName" name="firstName" class="form__input" required>
+                            </div>
+                            <div class="form__group">
+                                <label for="lastName" class="form__label">Last Name *</label>
+                                <input type="text" id="lastName" name="lastName" class="form__input" required>
+                            </div>
+                        </div>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label for="email" class="form__label">Email Address *</label>
+                                <input type="email" id="email" name="email" class="form__input" required>
+                            </div>
+                            <div class="form__group">
+                                <label for="phone" class="form__label">Phone Number</label>
+                                <input type="tel" id="phone" name="phone" class="form__input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Essay Details -->
+                    <div class="form__section">
+                        <h3 class="form__section-title">Essay Details</h3>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label for="essayType" class="form__label">Type of Essay *</label>
+                                <select id="essayType" name="essayType" class="form__select" required>
+                                    <option value="">Select Essay Type</option>
+                                    <option value="argumentative">Argumentative Essay</option>
+                                    <option value="persuasive">Persuasive Essay</option>
+                                    <option value="expository">Expository Essay</option>
+                                    <option value="narrative">Narrative Essay</option>
+                                    <option value="descriptive">Descriptive Essay</option>
+                                    <option value="compare-contrast">Compare & Contrast Essay</option>
+                                    <option value="cause-effect">Cause & Effect Essay</option>
+                                    <option value="research-paper">Research Paper</option>
+                                    <option value="dissertation">Dissertation</option>
+                                    <option value="thesis">Thesis</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form__group">
+                                <label for="academicLevel" class="form__label">Academic Level *</label>
+                                <select id="academicLevel" name="academicLevel" class="form__select" required>
+                                    <option value="">Select Academic Level</option>
+                                    <option value="high-school">High School</option>
+                                    <option value="undergraduate">Undergraduate</option>
+                                    <option value="masters">Masters</option>
+                                    <option value="phd">PhD</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label for="subject" class="form__label">Subject/Field *</label>
+                                <input type="text" id="subject" name="subject" class="form__input" placeholder="e.g., English Literature, Psychology, Business" required>
+                            </div>
+                            <div class="form__group">
+                                <label for="pages" class="form__label">Number of Pages *</label>
+                                <input type="number" id="pages" name="pages" class="form__input" min="1" max="100" required>
+                            </div>
+                        </div>
+                        <div class="form__group">
+                            <label for="deadline" class="form__label">Deadline *</label>
+                            <input type="datetime-local" id="deadline" name="deadline" class="form__input" required>
+                        </div>
+                    </div>
+
+                    <!-- Essay Requirements -->
+                    <div class="form__section">
+                        <h3 class="form__section-title">Essay Requirements</h3>
+                        <div class="form__group">
+                            <label for="topic" class="form__label">Essay Topic/Title *</label>
+                            <input type="text" id="topic" name="topic" class="form__input" placeholder="Enter your essay topic or title" required>
+                        </div>
+                        <div class="form__group">
+                            <label for="instructions" class="form__label">Specific Instructions</label>
+                            <textarea id="instructions" name="instructions" class="form__textarea" rows="4" placeholder="Provide any specific requirements, guidelines, or instructions for your essay..."></textarea>
+                        </div>
+                        <div class="form__group">
+                            <label for="sources" class="form__label">Required Sources</label>
+                            <input type="number" id="sources" name="sources" class="form__input" min="0" placeholder="Number of sources required">
+                        </div>
+                        <div class="form__group">
+                            <label for="citationStyle" class="form__label">Citation Style</label>
+                            <select id="citationStyle" name="citationStyle" class="form__select">
+                                <option value="">Select Citation Style</option>
+                                <option value="apa">APA</option>
+                                <option value="mla">MLA</option>
+                                <option value="chicago">Chicago</option>
+                                <option value="harvard">Harvard</option>
+                                <option value="turabian">Turabian</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Additional Information -->
+                    <div class="form__section">
+                        <h3 class="form__section-title">Additional Information</h3>
+                        <div class="form__group">
+                            <label for="additionalFiles" class="form__label">Upload Files (Optional)</label>
+                            <input type="file" id="additionalFiles" name="additionalFiles" class="form__file" multiple accept=".pdf,.doc,.docx,.txt">
+                            <small class="form__help">Upload any relevant files, guidelines, or reference materials (PDF, DOC, DOCX, TXT)</small>
+                        </div>
+                        <div class="form__group">
+                            <label for="writerPreference" class="form__label">Writer Preference</label>
+                            <select id="writerPreference" name="writerPreference" class="form__select">
+                                <option value="">No Preference</option>
+                                <option value="native-english">Native English Speaker</option>
+                                <option value="subject-expert">Subject Matter Expert</option>
+                                <option value="phd-holder">PhD Holder</option>
+                            </select>
+                        </div>
+                        <div class="form__group">
+                            <div class="form__free-notice">
+                                <i class="fas fa-gift"></i>
+                                <span>All our services are completely FREE!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terms and Conditions -->
+                    <div class="form__section">
+                        <div class="form__group">
+                            <label class="form__checkbox">
+                                <input type="checkbox" id="terms" name="terms" required>
+                                <span class="form__checkmark"></span>
+                                I agree to the <a href="#" class="form__link">Terms and Conditions</a> and <a href="#" class="form__link">Privacy Policy</a> *
+                            </label>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__checkbox">
+                                <input type="checkbox" id="newsletter" name="newsletter">
+                                <span class="form__checkmark"></span>
+                                Subscribe to our newsletter for updates and special offers
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="form__submit">
+                        <button type="submit" class="btn btn--primary btn--large">
+                            Submit Essay Request
+                            <i class="fas fa-paper-plane btn__icon"></i>
+                        </button>
+                        <p class="form__submit-note">
+                            * Required fields. We'll review your request and get back to you within 2 hours.
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Choose Us Section -->
+    <section class="why__choose">
+        <div class="container">
+            <div class="section__header">
+                <h2 class="section__title">Why Choose Our Essay Writing Service?</h2>
+            </div>
+            <div class="why__grid">
+                <div class="why__item">
+                    <div class="why__icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <h3 class="why__title">Expert Writers</h3>
+                    <p class="why__description">Our team consists of PhD and Master's degree holders with extensive experience in academic writing.</p>
+                </div>
+                <div class="why__item">
+                    <div class="why__icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h3 class="why__title">On-Time Delivery</h3>
+                    <p class="why__description">We guarantee timely delivery of your essay, even for urgent deadlines.</p>
+                </div>
+                <div class="why__item">
+                    <div class="why__icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3 class="why__title">100% Original</h3>
+                    <p class="why__description">Every essay is written from scratch and checked for plagiarism using advanced tools.</p>
+                </div>
+                <div class="why__item">
+                    <div class="why__icon">
+                        <i class="fas fa-redo"></i>
+                    </div>
+                    <h3 class="why__title">Free Revisions</h3>
+                    <p class="why__description">We offer unlimited free revisions until you're completely satisfied with your essay.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner in academic excellence.
+                    </p>
+                </div>
+                <div class="footer__column">
+                    <h4 class="footer__title">Services</h4>
+                    <ul class="footer__list">
+                        <li><a href="index.html#services" class="footer__link">Essay Writing</a></li>
+                        <li><a href="index.html#services" class="footer__link">Research Papers</a></li>
+                        <li><a href="index.html#services" class="footer__link">Dissertations</a></li>
+                        <li><a href="index.html#services" class="footer__link">Editing</a></li>
+                    </ul>
+                </div>
+                <div class="footer__column">
+                    <h4 class="footer__title">Support</h4>
+                    <ul class="footer__list">
+                        <li><a href="index.html#contact" class="footer__link">Contact Us</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copyright">
+                    &copy; 2025 English Essay Writing. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        // Form submission handling
+        document.getElementById('essayForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Get form data
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            
+            // Simple validation
+            if (!data.firstName || !data.lastName || !data.email || !data.essayType || !data.academicLevel || !data.subject || !data.pages || !data.deadline || !data.topic || !data.terms) {
+                alert('Please fill in all required fields.');
+                return;
+            }
+            
+            // Simulate form submission
+            alert('Thank you for your submission! We will review your essay request and contact you within 2 hours with a quote and writer assignment.');
+            
+            // Reset form
+            this.reset();
+        });
+    </script>
+</body>
+</html>
