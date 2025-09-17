@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Essay Writing Service</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .admin-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sidebar-header {
+            padding: 32px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+        }
+        
+        .sidebar-header .subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+        
+        .sidebar-nav {
+            padding: 24px 0;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 16px 24px;
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            font-weight: 500;
+        }
+        
+        .nav-item:hover, .nav-item.active {
+            background: rgba(59, 130, 246, 0.1);
+            color: #60a5fa;
+            border-left-color: #3b82f6;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 16px;
+        }
+        
+        .user-section {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.1);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .user-avatar {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .user-details h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .user-details p {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        
+        .logout-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 32px;
+            background: #f8fafc;
+        }
+        
+        .page-header {
+            margin-bottom: 32px;
+        }
+        
+        .page-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .page-subtitle {
+            font-size: 16px;
+            color: #64748b;
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        
+        .stat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .stat-icon.total { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
+        .stat-icon.pending { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .stat-icon.completed { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .stat-icon.assigned { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        
+        .stat-change {
+            font-size: 14px;
+            color: #10b981;
+            font-weight: 500;
+        }
+        
+        /* Table Section */
+        .table-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+        }
+        
+        .table-header {
+            padding: 24px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        
+        .table-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .table-subtitle {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        .data-table th {
+            background: #f8fafc;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #e5e7eb;
+            white-space: nowrap;
+        }
+        
+        .data-table td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: top;
+        }
+        
+        .data-table tr:hover {
+            background: #f9fafb;
+        }
+        
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Column styling */
+        .data-table td:nth-child(7), /* Topic column */
+        .data-table td:nth-child(8) { /* Instructions column */
+            max-width: 200px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .data-table td:nth-child(8) { /* Instructions column */
+            max-width: 250px;
+        }
+        
+        .data-table td:nth-child(9) { /* Citation Style column */
+            font-size: 13px;
+            color: #6b7280;
+        }
+        
+        /* Status badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .status-in-progress {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        
+        .status-completed {
+            background: #d1fae5;
+            color: #059669;
+        }
+        
+        .status-cancelled {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .action-btn.edit {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+        
+        .action-btn.edit:hover {
+            background: #bfdbfe;
+        }
+        
+        .action-btn.status {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .action-btn.status:hover {
+            background: #fde68a;
+        }
+        
+        .action-btn.complete {
+            background: #d1fae5;
+            color: #059669;
+        }
+        
+        .action-btn.complete:hover {
+            background: #a7f3d0;
+        }
+        
+        .action-btn.contact {
+            background: #e0e7ff;
+            color: #7c3aed;
+        }
+        
+        .action-btn.contact:hover {
+            background: #c7d2fe;
+        }
+        
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* File links */
+        .file-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: #eff6ff;
+            transition: all 0.3s ease;
+        }
+        
+        .file-link:hover {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        
+        .no-file {
+            color: #9ca3af;
+            font-style: italic;
+            font-size: 13px;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 64px 24px;
+            color: #64748b;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            color: #cbd5e1;
+            margin-bottom: 16px;
+        }
+        
+        .empty-state h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+        
+        .empty-state p {
+            font-size: 14px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .page-title {
+                font-size: 24px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .data-table th,
+            .data-table td {
+                padding: 12px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>
+                    <i class="fas fa-graduation-cap"></i>
+                    Admin Panel
+                </h1>
+                <div class="subtitle">Essay Writing Service</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active">
+                    <i class="fas fa-chart-pie"></i>
+                    Dashboard
+                </a>
+                <a href="#submissions" class="nav-item">
+                    <i class="fas fa-file-alt"></i>
+                    Submissions
+                </a>
+                <a href="#reviews" class="nav-item">
+                    <i class="fas fa-star"></i>
+                    Reviews
+                </a>
+                <a href="#settings" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    Settings
+                </a>
+            </nav>
+            
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar">A</div>
+                    <div class="user-details">
+                        <h3>Admin User</h3>
+                        <p>System Administrator</p>
+                    </div>
+                </div>
+                <a href="/logout" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="page-header">
+                <h1 class="page-title">Dashboard Overview</h1>
+                <p class="page-subtitle">Manage essay submissions and track performance</p>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-title">Total Submissions</div>
+                        <div class="stat-icon total">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ stats.total_submissions }}</div>
+                    <div class="stat-change">+12% from last month</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-title">Pending Review</div>
+                        <div class="stat-icon pending">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ stats.pending_submissions }}</div>
+                    <div class="stat-change">Needs attention</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-title">Completed</div>
+                        <div class="stat-icon completed">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ stats.completed_submissions }}</div>
+                    <div class="stat-change">+8% from last month</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-title">Assigned</div>
+                        <div class="stat-icon assigned">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ stats.assigned_submissions or 0 }}</div>
+                    <div class="stat-change">In progress</div>
+                </div>
+            </div>
+            
+            <!-- Submissions Table -->
+            <div class="table-section">
+                <div class="table-header">
+                    <h2 class="table-title">Recent Submissions</h2>
+                    <p class="table-subtitle">All essay submissions and their current status</p>
+                </div>
+                
+                <div class="table-container">
+                    {% if submissions %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Email</th>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Pages</th>
+                                <th>Deadline</th>
+                                <th>Topic</th>
+                                <th>Instructions</th>
+                                <th>Citation Style</th>
+                                <th>Status</th>
+                                <th>File</th>
+                                <th>Actions</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for submission in submissions %}
+                            <tr>
+                                <td>
+                                    <div style="font-weight: 600; color: #1e293b;">
+                                        {{ submission[2] }} {{ submission[3] }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <a href="mailto:{{ submission[4] }}" style="color: #3b82f6; text-decoration: none;">
+                                        {{ submission[4] }}
+                                    </a>
+                                </td>
+                                <td>{{ submission[6] }}</td>
+                                <td>{{ submission[8] }}</td>
+                                <td>{{ submission[9] }}</td>
+                                <td>{{ submission[10] }}</td>
+                                <td>
+                                    <div style="max-width: 200px; word-wrap: break-word;">
+                                        {{ submission[11] or 'No topic provided' }}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="max-width: 250px; word-wrap: break-word;">
+                                        {{ submission[12] or 'No instructions provided' }}
+                                    </div>
+                                </td>
+                                <td>{{ submission[13] or 'Not specified' }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ submission[14] }}">
+                                        {{ submission[14].title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if submission[18] and submission[19] %}
+                                        <a href="/admin/download-file/{{ submission[0] }}" class="file-link">
+                                            <i class="fas fa-download"></i>
+                                            {{ submission[19] }}
+                                        </a>
+                                    {% else %}
+                                        <span class="no-file">No file</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="action-btn edit" onclick="editSubmission({{ submission[0] }})" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="action-btn status" onclick="quickStatusUpdate({{ submission[0] }}, '{{ submission[14] }}')" title="Quick Status Update">
+                                            <i class="fas fa-sync"></i>
+                                        </button>
+                                        <button class="action-btn complete" onclick="markCompleted({{ submission[0] }})" title="Mark as Completed" {% if submission[14] == 'completed' %}disabled{% endif %}>
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="action-btn contact" onclick="contactStudent({{ submission[0] }}, '{{ submission[4] }}')" title="Contact Student">
+                                            <i class="fas fa-envelope"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>{{ submission[16] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h3>No Submissions Yet</h3>
+                        <p>Essay submissions will appear here once students start submitting their requests.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navigation functionality
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Action button functions
+        function editSubmission(id) {
+            window.location.href = `/admin/edit-submission/${id}`;
+        }
+
+        function quickStatusUpdate(id, currentStatus) {
+            const newStatus = prompt(`Current status: ${currentStatus}\nEnter new status:`, currentStatus);
+            if (newStatus && newStatus !== currentStatus) {
+                fetch('/admin/update-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        submission_id: id,
+                        status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to update status');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to update status');
+                });
+            }
+        }
+
+        function markCompleted(id) {
+            if (confirm('Mark this submission as completed?')) {
+                fetch('/admin/update-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        submission_id: id,
+                        status: 'completed'
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Failed to mark as completed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to mark as completed');
+                });
+            }
+        }
+
+        function contactStudent(id, email) {
+            window.location.href = `mailto:${email}?subject=Essay Submission #${id}`;
+        }
+    </script>
+</body>
+</html>

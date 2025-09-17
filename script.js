@@ -283,13 +283,23 @@ class ParallaxEffect {
 // ===== REVIEW SYSTEM =====
 class ReviewSystem {
   constructor() {
-    this.reviews = JSON.parse(localStorage.getItem('essaypro_reviews')) || [];
     this.init();
   }
 
   init() {
     this.setupForm();
-    this.displayReviews();
+    this.loadReviews();
+  }
+
+  async loadReviews() {
+    try {
+      const response = await fetch('/get-reviews');
+      const reviews = await response.json();
+      this.displayReviews(reviews);
+    } catch (error) {
+      console.error('Failed to load reviews:', error);
+      this.displayReviews([]);
+    }
   }
 
   setupForm() {
@@ -299,33 +309,50 @@ class ReviewSystem {
     }
   }
 
-  handleSubmit(e) {
+  async handleSubmit(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
     const review = {
-      id: Date.now(),
       name: formData.get('name'),
       university: formData.get('university'),
       rating: parseInt(formData.get('rating')),
-      review: formData.get('review'),
-      date: new Date().toLocaleDateString()
+      reviewText: formData.get('review')
     };
 
     // Validate form
-    if (!review.name || !review.university || !review.rating || !review.review) {
+    if (!review.name || !review.university || !review.rating || !review.reviewText) {
       this.showMessage('Please fill in all fields', 'error');
       return;
     }
 
-    // Add review
-    this.reviews.unshift(review);
-    this.saveReviews();
-    this.displayReviews();
-    this.showMessage('Thank you for your review!', 'success');
-    
-    // Reset form
-    e.target.reset();
+    try {
+      const response = await fetch('/submit-review', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: review.name,
+          university: review.university,
+          rating: review.rating,
+          review_text: review.reviewText
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        this.showMessage('Thank you for your review!', 'success');
+        e.target.reset();
+        this.loadReviews(); // Reload reviews
+      } else {
+        this.showMessage('Failed to submit review. Please try again.', 'error');
+      }
+    } catch (error) {
+      console.error('Review submission error:', error);
+      this.showMessage('Failed to submit review. Please try again.', 'error');
+    }
   }
 
   displayReviews() {

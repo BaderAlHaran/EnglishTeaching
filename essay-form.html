@@ -21,23 +21,23 @@
     <header class="header">
         <nav class="nav container">
             <div class="nav__brand">
-                <a href="index.html"><h1 class="nav__logo">English Essay Writing</h1></a>
+                <a href="/"><h1 class="nav__logo">English Essay Writing</h1></a>
             </div>
             <ul class="nav__menu" id="nav-menu">
                 <li class="nav__item">
-                    <a href="index.html" class="nav__link">Home</a>
+                    <a href="/" class="nav__link">Home</a>
                 </li>
                 <li class="nav__item">
-                    <a href="index.html#services" class="nav__link">Services</a>
+                    <a href="/#services" class="nav__link">Services</a>
                 </li>
                 <li class="nav__item">
-                    <a href="index.html#process" class="nav__link">Process</a>
+                    <a href="/#process" class="nav__link">Process</a>
                 </li>
                 <li class="nav__item">
-                    <a href="about.html" class="nav__link">About</a>
+                    <a href="/about" class="nav__link">About</a>
                 </li>
                 <li class="nav__item">
-                    <a href="index.html#contact" class="nav__link">Contact</a>
+                    <a href="/#contact" class="nav__link">Contact</a>
                 </li>
             </ul>
             <div class="nav__toggle" id="nav-toggle">
@@ -169,9 +169,9 @@
                     <div class="form__section">
                         <h3 class="form__section-title">Additional Information</h3>
                         <div class="form__group">
-                            <label for="additionalFiles" class="form__label">Upload Files (Optional)</label>
-                            <input type="file" id="additionalFiles" name="additionalFiles" class="form__file" multiple accept=".pdf,.doc,.docx,.txt">
-                            <small class="form__help">Upload any relevant files, guidelines, or reference materials (PDF, DOC, DOCX, TXT)</small>
+                            <label for="file" class="form__label">Upload Files (Optional)</label>
+                            <input type="file" id="file" name="file" class="form__file" accept=".pdf,.doc,.docx,.txt,.rtf,.odt">
+                            <small class="form__help">Upload any relevant files, guidelines, or reference materials (PDF, DOC, DOCX, TXT, RTF, ODT) - Max 16MB</small>
                         </div>
                         <div class="form__group">
                             <label for="writerPreference" class="form__label">Writer Preference</label>
@@ -196,7 +196,7 @@
                             <label class="form__checkbox">
                                 <input type="checkbox" id="terms" name="terms" required>
                                 <span class="form__checkmark"></span>
-                                I agree to the <a href="terms.html" class="form__link" target="_blank">Terms and Conditions</a> and <a href="privacy.html" class="form__link" target="_blank">Privacy Policy</a> *
+                                I agree to the <a href="/terms" class="form__link" target="_blank">Terms and Conditions</a> and <a href="/privacy" class="form__link" target="_blank">Privacy Policy</a> *
                             </label>
                         </div>
                         <div class="form__group">
@@ -275,16 +275,16 @@
                 <div class="footer__column">
                     <h4 class="footer__title">Services</h4>
                     <ul class="footer__list">
-                        <li><a href="index.html#services" class="footer__link">Essay Writing</a></li>
-                        <li><a href="index.html#services" class="footer__link">Research Papers</a></li>
-                        <li><a href="index.html#services" class="footer__link">Dissertations</a></li>
-                        <li><a href="index.html#services" class="footer__link">Editing</a></li>
+                        <li><a href="/#services" class="footer__link">Essay Writing</a></li>
+                        <li><a href="/#services" class="footer__link">Research Papers</a></li>
+                        <li><a href="/#services" class="footer__link">Dissertations</a></li>
+                        <li><a href="/#services" class="footer__link">Editing</a></li>
                     </ul>
                 </div>
                 <div class="footer__column">
                     <h4 class="footer__title">Support</h4>
                     <ul class="footer__list">
-                        <li><a href="index.html#contact" class="footer__link">Contact Us</a></li>
+                        <li><a href="/#contact" class="footer__link">Contact Us</a></li>
                     </ul>
                 </div>
             </div>
@@ -299,24 +299,45 @@
     <script src="script.js"></script>
     <script>
         // Form submission handling
-        document.getElementById('essayForm').addEventListener('submit', function(e) {
+        document.getElementById('essayForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             // Get form data
             const formData = new FormData(this);
-            const data = Object.fromEntries(formData);
             
             // Simple validation
-            if (!data.firstName || !data.lastName || !data.email || !data.essayType || !data.academicLevel || !data.subject || !data.pages || !data.deadline || !data.topic || !data.terms) {
-                alert('Please fill in all required fields.');
+            const requiredFields = ['firstName', 'lastName', 'email', 'essayType', 'academicLevel', 'subject', 'pages', 'deadline', 'topic'];
+            for (const field of requiredFields) {
+                if (!formData.get(field)) {
+                    alert('Please fill in all required fields.');
+                    return;
+                }
+            }
+            
+            if (!formData.get('terms')) {
+                alert('Please accept the terms and conditions.');
                 return;
             }
             
-            // Simulate form submission
-            alert('Thank you for your submission! We will review your essay request and contact you within 2 hours with a quote and writer assignment.');
-            
-            // Reset form
-            this.reset();
+            try {
+                // Submit to simplified backend with file upload
+                const response = await fetch('/submit-essay', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Thank you for your submission! We will review your essay request and contact you within 2 hours with a quote and writer assignment.');
+                    this.reset();
+                } else {
+                    alert('Failed to submit request: ' + (result.error || 'Please try again.'));
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('Failed to submit request. Please try again.');
+            }
         });
     </script>
 </body>
