@@ -20,3 +20,5 @@ services:
         value: uploads
       - key: PORT
         value: 10000
+      - key: CUSTOM_DOMAIN
+        sync: false

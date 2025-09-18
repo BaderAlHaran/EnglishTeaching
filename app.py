@@ -35,6 +35,27 @@ CORS(app, origins=[
     "http://127.0.0.1:5000"
 ])
 
+# Add custom domain support
+CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
+if CUSTOM_DOMAIN:
+    # Add custom domain to CORS origins
+    app.config['CORS_ORIGINS'] = [
+        f"https://{CUSTOM_DOMAIN}",
+        f"https://www.{CUSTOM_DOMAIN}",
+        "https://*.onrender.com",
+        "https://*.render.com", 
+        "http://localhost:5000",
+        "http://127.0.0.1:5000"
+    ]
+    # Reconfigure CORS with custom domain
+    CORS(app, origins=app.config['CORS_ORIGINS'])
+
+# Force HTTPS in production
+@app.before_request
+def force_https():
+    if not app.debug and request.headers.get('X-Forwarded-Proto') == 'http':
+        return redirect(request.url.replace('http://', 'https://'), code=301)
+
 # File upload configuration
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'rtf', 'odt'}
