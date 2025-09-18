@@ -283,6 +283,7 @@ class ParallaxEffect {
 // ===== REVIEW SYSTEM =====
 class ReviewSystem {
   constructor() {
+    this.reviews = [];
     this.init();
   }
 
@@ -294,11 +295,19 @@ class ReviewSystem {
   async loadReviews() {
     try {
       const response = await fetch('/get-reviews');
-      const reviews = await response.json();
-      this.displayReviews(reviews);
+      const rows = await response.json();
+      this.reviews = (rows || []).map(r => ({
+        name: r.name,
+        university: r.university,
+        rating: Number(r.rating) || 0,
+        review: r.review_text || r.review || '',
+        date: r.created_at || ''
+      }));
+      this.displayReviews(this.reviews);
     } catch (error) {
       console.error('Failed to load reviews:', error);
-      this.displayReviews([]);
+      this.reviews = [];
+      this.displayReviews(this.reviews);
     }
   }
 
@@ -345,7 +354,15 @@ class ReviewSystem {
       if (result.success) {
         this.showMessage('Thank you for your review!', 'success');
         e.target.reset();
-        this.loadReviews(); // Reload reviews
+        // Optimistically add the new review locally for immediate display
+        this.reviews.unshift({
+          name: review.name,
+          university: review.university,
+          rating: review.rating,
+          review: review.reviewText,
+          date: new Date().toISOString()
+        });
+        this.displayReviews(this.reviews);
       } else {
         this.showMessage('Failed to submit review. Please try again.', 'error');
       }
@@ -355,16 +372,16 @@ class ReviewSystem {
     }
   }
 
-  displayReviews() {
+  displayReviews(list) {
     const reviewsGrid = document.getElementById('reviewsGrid');
     if (!reviewsGrid) return;
 
-    if (this.reviews.length === 0) {
+    if (!list || list.length === 0) {
       reviewsGrid.innerHTML = '<p class="no-reviews">No reviews yet. Be the first to share your experience!</p>';
       return;
     }
 
-    reviewsGrid.innerHTML = this.reviews.map(review => this.createReviewCard(review)).join('');
+    reviewsGrid.innerHTML = list.map(review => this.createReviewCard(review)).join('');
   }
 
   createReviewCard(review) {

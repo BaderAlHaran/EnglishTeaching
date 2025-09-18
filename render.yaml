@@ -11,10 +11,12 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: ADMIN_USERNAME
-        value: admin
+        value: mikoandnenoarecool
       - key: ADMIN_PASSWORD
-        generateValue: true
+        sync: false
       - key: ADMIN_EMAIL
         value: admin@essaywritingservice.com
+      - key: DATABASE_URL
+        sync: false
       - key: PORT
         value: 10000

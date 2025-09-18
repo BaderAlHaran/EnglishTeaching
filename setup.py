@@ -22,12 +22,10 @@ def install_requirements():
 
 def setup_admin_user():
     """Set up admin user with custom credentials"""
-    print("\n🔐 Admin User Setup")
-    print("==================")
-    
-    username = input("Enter admin username (default: admin): ").strip() or "admin"
-    password = input("Enter admin password (default: EssayAdmin2024!): ").strip() or "EssayAdmin2024!"
-    email = input("Enter admin email (default: admin@essaywriting.com): ").strip() or "admin@essaywriting.com"
+    # Non-interactive secure defaults
+    username = os.environ.get('ADMIN_USERNAME', 'mekoandnenoarecool')
+    password = os.environ.get('ADMIN_PASSWORD', secrets.token_urlsafe(32))
+    email = os.environ.get('ADMIN_EMAIL', 'admin@essaywriting.com')
     
     # Hash password
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -46,10 +44,7 @@ def setup_admin_user():
         conn.commit()
         conn.close()
         
-        print(f"✅ Admin user created successfully!")
-        print(f"   Username: {username}")
-        print(f"   Email: {email}")
-        print(f"   Password: {password}")
+        print("✅ Admin user created successfully!")
         
     except Exception as e:
         print(f"❌ Failed to create admin user: {e}")

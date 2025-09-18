@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - English Essay Writing</title>
+    <meta name="description" content="Get in touch with our essay writing service. We're here to help with your academic writing needs.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <h1 class="nav__logo">English Essay Writing</h1>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item">
+                    <a href="/" class="nav__link">Home</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#services" class="nav__link">Services</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#process" class="nav__link">Process</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/about" class="nav__link">About</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/contact" class="nav__link active">Contact</a>
+                </li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contact Section -->
+    <section class="contact section">
+        <div class="container">
+            <div class="contact__container">
+                <div class="contact__content">
+                    <h2 class="section__title">Get in Touch</h2>
+                    <p class="section__subtitle">How can we help you?</p>
+                    <p class="contact__description">
+                        We're here to assist you with all your essay writing needs. Whether you have questions about our services, need help with your order, or want to discuss your requirements, we'd love to hear from you.
+                    </p>
+                    
+                    <div class="contact__info">
+                        <div class="contact__item">
+                            <i class="fas fa-envelope contact__icon"></i>
+                            <div>
+                                <h3 class="contact__title">Email Us</h3>
+                                <span class="contact__subtitle">We'll get back to you within 24 hours</span>
+                                <p class="contact__subtitle"><a href="mailto:norakalmutairi@gmail.com">norakalmutairi@gmail.com</a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="contact__form-container">
+                    <div class="contact__form">
+                        <div class="contact__form-group">
+                            <label class="contact__form-label">Contact Email</label>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <a href="mailto:norakalmutairi@gmail.com" class="contact__form-input" style="display:block;text-decoration:none;">
+                                    norakalmutairi@gmail.com
+                                </a>
+                                <button type="button" class="btn btn--primary contact__form-btn" id="copyEmailBtn">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>norakalmutairi@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer__bottom">
+                <p class="footer__copy">
+                    &copy; 2024 English Essay Writing. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+        // Copy email helper
+        const copyBtn = document.getElementById('copyEmailBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText('norakalmutairi@gmail.com');
+                    alert('Email copied to clipboard');
+                } catch (e) {
+                    alert('Copy failed, please copy manually.');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

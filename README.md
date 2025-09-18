@@ -73,9 +73,9 @@ A professional essay writing service with a secure admin dashboard, built with P
    - Admin Login: `http://localhost:5000/login`
    - Admin Dashboard: `http://localhost:5000/admin`
 
-### **Default Admin Credentials**
-- **Username:** `admin`
-- **Password:** `EssayAdmin2024!`
+### **Admin Credentials**
+- Configure via environment variables and never hardcode or print them.
+- Defaults: username `mekoandnenoarecool`, password is a random secure token at first run.
 
 ## Deployment
 

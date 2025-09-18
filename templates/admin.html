@@ -18,6 +18,7 @@
             background: #f8fafc;
             color: #1e293b;
             line-height: 1.6;
+            overflow-x: hidden;
         }
         
         .admin-container {
@@ -78,10 +79,19 @@
             border-left-color: #3b82f6;
         }
         
-        .nav-item i {
-            width: 20px;
+        .nav-item i { display: none; }
+        .nav-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             margin-right: 12px;
-            font-size: 16px;
+            font-weight: 700;
+            font-size: 13px;
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
         }
         
         .user-section {
@@ -147,6 +157,7 @@
             margin-left: 280px;
             padding: 32px;
             background: #f8fafc;
+            overflow-x: hidden;
         }
         
         .page-header {
@@ -258,18 +269,20 @@
         }
         
         .table-container {
-            overflow-x: auto;
+            overflow-x: hidden;
+            padding: 8px 4px;
         }
         
         .data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
+            table-layout: fixed;
         }
         
         .data-table th {
             background: #f8fafc;
-            padding: 16px 20px;
+            padding: 20px 22px;
             text-align: left;
             font-weight: 600;
             color: #374151;
@@ -277,13 +290,21 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             border-bottom: 1px solid #e5e7eb;
-            white-space: nowrap;
+            white-space: normal;
         }
         
         .data-table td {
-            padding: 16px 20px;
-            border-bottom: 1px solid #f3f4f6;
+            padding: 18px 22px;
+            border-bottom: 0;
             vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            line-height: 1.6;
+        }
+
+        .data-table tbody tr {
+            background: #ffffff;
+            border-bottom: 12px solid #f8fafc; /* visual spacing between rows */
         }
         
         .data-table tr:hover {
@@ -353,7 +374,7 @@
         }
         
         .action-btn {
-            width: 32px;
+            min-width: 36px;
             height: 32px;
             border: none;
             border-radius: 8px;
@@ -362,40 +383,30 @@
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
-            font-size: 14px;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
         }
         
-        .action-btn.edit {
-            background: #dbeafe;
-            color: #2563eb;
-        }
+        .action-btn.edit { background: #dbeafe; color: #2563eb; }
         
         .action-btn.edit:hover {
             background: #bfdbfe;
         }
         
-        .action-btn.status {
-            background: #fef3c7;
-            color: #d97706;
-        }
+        .action-btn.status { background: #fef3c7; color: #d97706; }
         
         .action-btn.status:hover {
             background: #fde68a;
         }
         
-        .action-btn.complete {
-            background: #d1fae5;
-            color: #059669;
-        }
+        .action-btn.complete { background: #d1fae5; color: #059669; }
         
         .action-btn.complete:hover {
             background: #a7f3d0;
         }
         
-        .action-btn.contact {
-            background: #e0e7ff;
-            color: #7c3aed;
-        }
+        .action-btn.contact { background: #e0e7ff; color: #7c3aed; }
         
         .action-btn.contact:hover {
             background: #c7d2fe;
@@ -489,6 +500,31 @@
                 padding: 12px 16px;
             }
         }
+
+        /* Sidebar removed */
+        .sidebar { display: none !important; }
+        .main-content { margin-left: 0 !important; }
+
+        /* Extra-small mobile optimizations */
+        @media (max-width: 640px) {
+            .page-title { font-size: 20px; }
+            .page-subtitle { font-size: 14px; }
+            .stat-card { padding: 16px; }
+            .stat-value { font-size: 24px; }
+            .table-title { font-size: 18px; }
+
+            /* Turn table into stacked cards */
+            .table-container { overflow-x: visible; }
+            .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr { display: block; }
+            .data-table thead { display: none; }
+            .data-table tr { background: #ffffff; margin: 0 0 12px; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+            .data-table td { border: none; border-bottom: 1px solid #f3f4f6; position: relative; padding: 12px 16px 12px 120px; min-height: 48px; }
+            .data-table td:last-child { border-bottom: 0; }
+            .data-table td::before { content: attr(data-label); position: absolute; left: 16px; top: 12px; width: 90px; font-weight: 600; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+            .data-table { font-size: 14px; }
+            .action-buttons { gap: 8px; }
+            .action-btn { min-width: 36px; height: 32px; }
+        }
     </style>
 </head>
 <body>
@@ -505,36 +541,24 @@
             
             <nav class="sidebar-nav">
                 <a href="#dashboard" class="nav-item active">
-                    <i class="fas fa-chart-pie"></i>
+                    <span class="nav-badge">D</span>
                     Dashboard
                 </a>
                 <a href="#submissions" class="nav-item">
-                    <i class="fas fa-file-alt"></i>
+                    <span class="nav-badge">S</span>
                     Submissions
                 </a>
                 <a href="#reviews" class="nav-item">
-                    <i class="fas fa-star"></i>
+                    <span class="nav-badge">R</span>
                     Reviews
                 </a>
                 <a href="#settings" class="nav-item">
-                    <i class="fas fa-cog"></i>
+                    <span class="nav-badge">T</span>
                     Settings
                 </a>
             </nav>
             
-            <div class="user-section">
-                <div class="user-info">
-                    <div class="user-avatar">A</div>
-                    <div class="user-details">
-                        <h3>Admin User</h3>
-                        <p>System Administrator</p>
-                    </div>
-                </div>
-                <a href="/logout" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i>
-                    Logout
-                </a>
-            </div>
+            
         </div>
         
         <!-- Main Content -->
@@ -542,6 +566,11 @@
             <div class="page-header">
                 <h1 class="page-title">Dashboard Overview</h1>
                 <p class="page-subtitle">Manage essay submissions and track performance</p>
+                {% if not password_set %}
+                <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+                    <button class="btn btn--primary" onclick="openPasswordModal()" style="padding:10px 14px;background:#1f2937;color:#fff;border-radius:8px">Set Admin Password</button>
+                </div>
+                {% endif %}
             </div>
             
             <!-- Stats Cards -->
@@ -621,37 +650,37 @@
                         <tbody>
                             {% for submission in submissions %}
                             <tr>
-                                <td>
+                                <td data-label="Student">
                                     <div style="font-weight: 600; color: #1e293b;">
                                         {{ submission[2] }} {{ submission[3] }}
                                     </div>
                                 </td>
-                                <td>
+                                <td data-label="Email">
                                     <a href="mailto:{{ submission[4] }}" style="color: #3b82f6; text-decoration: none;">
                                         {{ submission[4] }}
                                     </a>
                                 </td>
-                                <td>{{ submission[6] }}</td>
-                                <td>{{ submission[8] }}</td>
-                                <td>{{ submission[9] }}</td>
-                                <td>{{ submission[10] }}</td>
-                                <td>
+                                <td data-label="Type">{{ submission[6] }}</td>
+                                <td data-label="Subject">{{ submission[8] }}</td>
+                                <td data-label="Pages">{{ submission[9] }}</td>
+                                <td data-label="Deadline">{{ submission[10] }}</td>
+                                <td data-label="Topic">
                                     <div style="max-width: 200px; word-wrap: break-word;">
                                         {{ submission[11] or 'No topic provided' }}
                                     </div>
                                 </td>
-                                <td>
+                                <td data-label="Instructions">
                                     <div style="max-width: 250px; word-wrap: break-word;">
                                         {{ submission[12] or 'No instructions provided' }}
                                     </div>
                                 </td>
-                                <td>{{ submission[13] or 'Not specified' }}</td>
-                                <td>
+                                <td data-label="Citation">{{ submission[13] or 'Not specified' }}</td>
+                                <td data-label="Status">
                                     <span class="status-badge status-{{ submission[14] }}">
                                         {{ submission[14].title() }}
                                     </span>
                                 </td>
-                                <td>
+                                <td data-label="File">
                                     {% if submission[18] and submission[19] %}
                                         <a href="/admin/download-file/{{ submission[0] }}" class="file-link">
                                             <i class="fas fa-download"></i>
@@ -661,23 +690,18 @@
                                         <span class="no-file">No file</span>
                                     {% endif %}
                                 </td>
-                                <td>
+                                <td data-label="Actions">
                                     <div class="action-buttons">
-                                        <button class="action-btn edit" onclick="editSubmission({{ submission[0] }})" title="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="action-btn status" onclick="quickStatusUpdate({{ submission[0] }}, '{{ submission[14] }}')" title="Quick Status Update">
-                                            <i class="fas fa-sync"></i>
-                                        </button>
-                                        <button class="action-btn complete" onclick="markCompleted({{ submission[0] }})" title="Mark as Completed" {% if submission[14] == 'completed' %}disabled{% endif %}>
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                        <button class="action-btn contact" onclick="contactStudent({{ submission[0] }}, '{{ submission[4] }}')" title="Contact Student">
-                                            <i class="fas fa-envelope"></i>
-                                        </button>
+                                        <button class="action-btn edit" onclick="editSubmission({{ submission[0] }})" title="Edit">E</button>
+                                        <button class="action-btn status" onclick="quickStatusUpdate({{ submission[0] }}, '{{ submission[14] }}')" title="Status">S</button>
+                                        <button class="action-btn complete" onclick="markCompleted({{ submission[0] }})" title="Complete" {% if submission[14] == 'completed' %}disabled{% endif %}>C</button>
+                                        <button class="action-btn contact" onclick="contactStudent({{ submission[0] }}, '{{ submission[4] }}')" title="Email">M</button>
+                                        {% if submission[14] == 'completed' %}
+                                        <button class="action-btn edit" style="background:#fee2e2;color:#dc2626" onclick="deleteSubmission({{ submission[0] }})" title="Delete">D</button>
+                                        {% endif %}
                                     </div>
                                 </td>
-                                <td>{{ submission[16] }}</td>
+                                <td data-label="Submitted">{{ submission[16] }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -766,6 +790,41 @@
 
         function contactStudent(id, email) {
             window.location.href = `mailto:${email}?subject=Essay Submission #${id}`;
+        }
+
+        async function deleteSubmission(id) {
+            if (!confirm('Delete this completed submission? This cannot be undone.')) return;
+            try {
+                const res = await fetch('/admin/delete-submission', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ submission_id: id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Failed to delete');
+                }
+            } catch (e) {
+                alert('Failed to delete');
+            }
+        }
+
+        // Password modal simple implementation
+        function openPasswordModal() {
+            const newPwd = prompt('Enter new admin password');
+            if (!newPwd) return;
+            const confirmPwd = prompt('Confirm new admin password');
+            if (newPwd !== confirmPwd) { alert('Passwords do not match'); return; }
+            fetch('/admin/set-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: newPwd })
+            }).then(r=>r.json()).then(d=>{
+                if (d.success) alert('Password updated successfully');
+                else alert(d.error || 'Failed to update password');
+            }).catch(()=>alert('Failed to update password'));
         }
     </script>
 </body>
