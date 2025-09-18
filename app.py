@@ -13,6 +13,7 @@ import re
 import smtplib
 import ssl
 from email.message import EmailMessage
+import logging
 
 app = Flask(__name__)
 
@@ -20,6 +21,11 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['DEBUG'] = os.environ.get('FLASK_ENV') != 'production'
 app.config['TESTING'] = False
+
+# Configure logging for production
+if not app.debug:
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
 
 # CORS configuration for production
 CORS(app, origins=[
@@ -245,7 +251,7 @@ def init_database():
     
     conn.commit()
     conn.close()
-    print("✅ Database initialized successfully")
+    print("Database initialized successfully")
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt."""
@@ -447,8 +453,22 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/admin')
-@require_login
 def admin():
+    # Check if password is set first
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
+    pw_row = cursor.fetchone()
+    password_set = bool(pw_row and pw_row[0])
+    conn.close()
+    
+    # If password not set, redirect to setup
+    if not password_set:
+        return redirect(url_for('admin_setup'))
+    
+    # Check if user is logged in
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('login'))
     # Get statistics
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
@@ -484,6 +504,56 @@ def admin():
     }
     
     return render_template('admin.html', stats=stats, submissions=all_submissions, password_set=password_set)
+
+@app.route('/admin-setup')
+def admin_setup():
+    """Admin password setup page"""
+    # Check if password is already set
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
+    pw_row = cursor.fetchone()
+    password_set = bool(pw_row and pw_row[0])
+    conn.close()
+    
+    if password_set:
+        return redirect(url_for('login'))
+    
+    return render_template('admin_setup.html', username=ADMIN_USERNAME)
+
+@app.route('/admin-setup', methods=['POST'])
+def admin_setup_post():
+    """Handle admin password setup"""
+    password = request.form.get('password')
+    confirm_password = request.form.get('confirm_password')
+    
+    if not password or not confirm_password:
+        flash('Please fill in all fields', 'error')
+        return redirect(url_for('admin_setup'))
+    
+    if password != confirm_password:
+        flash('Passwords do not match', 'error')
+        return redirect(url_for('admin_setup'))
+    
+    if len(password) < 8:
+        flash('Password must be at least 8 characters long', 'error')
+        return redirect(url_for('admin_setup'))
+    
+    # Hash and save password
+    password_hash = hash_password(password)
+    
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE admin_users 
+        SET password_hash = ? 
+        WHERE username = ?
+    ''', (password_hash, ADMIN_USERNAME))
+    conn.commit()
+    conn.close()
+    
+    flash('Password set successfully! You can now log in.', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/submit-essay', methods=['POST'])
 def submit_essay():
@@ -775,12 +845,10 @@ def admin_set_password():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("🚀 Starting Simple Essay Writing Service...")
-    print("📊 Backend: Python Flask (Simplified)")
-    print("🗄️  Database: SQLite")
-    print("🌐 URL: http://localhost:5000")
-    print("==================================================")
-    print(f"🔐 Admin Username: {ADMIN_USERNAME}")
-    print(f"🔐 Admin Email: {ADMIN_EMAIL}")
-    print("✅ Database initialized successfully")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Initialize database
+    init_database()
+    
+    # Development server (not used in production)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    app.run(debug=debug, host='0.0.0.0', port=port)
