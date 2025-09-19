@@ -681,10 +681,10 @@
                                     </span>
                                 </td>
                                 <td data-label="File">
-                                    {% if submission[18] and submission[19] %}
+                                    {% if submission[16] and submission[17] %}
                                         <a href="/admin/download-file/{{ submission[0] }}" class="file-link">
                                             <i class="fas fa-download"></i>
-                                            {{ submission[19] }}
+                                            {{ submission[17] }}
                                         </a>
                                     {% else %}
                                         <span class="no-file">No file</span>
@@ -738,6 +738,7 @@
             if (newStatus && newStatus !== currentStatus) {
                 fetch('/admin/update-status', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -765,6 +766,7 @@
             if (confirm('Mark this submission as completed?')) {
                 fetch('/admin/update-status', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
                     },
@@ -797,6 +799,7 @@
             try {
                 const res = await fetch('/admin/delete-submission', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ submission_id: id })
                 });

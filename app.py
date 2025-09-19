@@ -33,7 +33,7 @@ CORS(app, origins=[
     "https://*.render.com", 
     "http://localhost:5000",
     "http://127.0.0.1:5000"
-])
+], supports_credentials=True)
 
 # Add custom domain support
 CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
@@ -48,7 +48,7 @@ if CUSTOM_DOMAIN:
         "http://127.0.0.1:5000"
     ]
     # Reconfigure CORS with custom domain
-    CORS(app, origins=app.config['CORS_ORIGINS'])
+    CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
 
 # Force HTTPS in production
 @app.before_request
@@ -749,6 +749,14 @@ def download_file(submission_id):
         return redirect(url_for('admin'))
     
     file_path, file_name = result
+    # Normalize path separators for cross-platform compatibility
+    file_path = file_path.replace('\\', '/')
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        flash('File not found on disk!', 'error')
+        return redirect(url_for('admin'))
+    
     return send_file(file_path, as_attachment=True, download_name=file_name)
 
 @app.route('/admin/update-status', methods=['POST'])
