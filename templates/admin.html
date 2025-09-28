@@ -366,11 +366,6 @@
             color: #dc2626;
         }
         
-        .status-absent {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-        
         /* Action buttons */
         .action-buttons {
             display: flex;
@@ -630,10 +625,6 @@
                 <div class="table-header">
                     <h2 class="table-title">Recent Submissions</h2>
                     <p class="table-subtitle">All essay submissions and their current status</p>
-                    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-                        <button onclick="filterByStatus('all')" style="padding:8px 12px;background:#e5e7eb;color:#111827;border-radius:8px;border:1px solid #d1d5db">Show All</button>
-                        <button onclick="filterByStatus('absent')" style="padding:8px 12px;background:#fee2e2;color:#b91c1c;border-radius:8px;border:1px solid #fecaca">Show Absent</button>
-                    </div>
                 </div>
                 
                 <div class="table-container">
@@ -658,7 +649,7 @@
                         </thead>
                         <tbody>
                             {% for submission in submissions %}
-                            <tr data-status="{{ submission[14] }}">
+                            <tr>
                                 <td data-label="Student">
                                     <div style="font-weight: 600; color: #1e293b;">
                                         {{ submission[2] }} {{ submission[3] }}
@@ -821,14 +812,6 @@
             } catch (e) {
                 alert('Failed to delete');
             }
-        }
-
-        function filterByStatus(status) {
-            const rows = document.querySelectorAll('.data-table tbody tr');
-            rows.forEach(row => {
-                const rowStatus = row.getAttribute('data-status') || '';
-                row.style.display = (status === 'all' || rowStatus === status) ? '' : 'none';
-            });
         }
 
         // Password modal simple implementation
