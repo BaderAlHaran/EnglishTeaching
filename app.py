@@ -455,6 +455,15 @@ def favicon():
         return send_from_directory('.', 'favicon.ico')
     return ('', 204)
 
+@app.route('/google23ea826885685fa0.html')
+def google_site_verification():
+    """Serve Google Search Console verification file"""
+    return (
+        'google-site-verification: google23ea826885685fa0.html',
+        200,
+        {'Content-Type': 'text/html; charset=utf-8'}
+    )
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
