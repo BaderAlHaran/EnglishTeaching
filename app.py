@@ -808,7 +808,9 @@ def get_reviews():
         })
     
     conn.close()
-    return jsonify(reviews)
+    resp = jsonify(reviews)
+    resp.headers['Cache-Control'] = 'no-store, max-age=0'
+    return resp
 
 @app.route('/admin/edit-submission/<int:submission_id>', methods=['GET', 'POST'])
 @require_login
