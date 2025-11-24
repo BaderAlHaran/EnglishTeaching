@@ -464,6 +464,31 @@ def google_site_verification():
         {'Content-Type': 'text/html; charset=utf-8'}
     )
 
+@app.route('/robots.txt')
+def robots_txt():
+    """Robots file allowing crawl and pointing to sitemap"""
+    base = request.url_root.rstrip('/')
+    content = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    return (content, 200, {'Content-Type': 'text/plain; charset=utf-8'})
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    """Simple dynamic sitemap covering key pages"""
+    base = request.url_root.rstrip('/')
+    urls = [
+        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy"
+    ]
+    items = "\n".join(
+        f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{items}\n"
+        "</urlset>\n"
+    )
+    return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
