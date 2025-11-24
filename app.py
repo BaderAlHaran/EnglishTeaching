@@ -679,38 +679,38 @@ def submit_essay():
 
         # Send email notifications (best-effort)
         student_email = (data['email'] or '').strip()
-        student_name = f\"{data.get('first_name','').strip()} {data.get('last_name','').strip()}\".strip()
+        student_name = f"{data.get('first_name','').strip()} {data.get('last_name','').strip()}".strip()
         submission_id = data['submission_id']
         try:
             if student_email:
                 _send_email(
                     to_email=student_email,
-                    subject=f\"Submission received: {submission_id}\",
+                    subject=f"Submission received: {submission_id}",
                     body=(
-                        f\"Hello {student_name or 'there'},\\n\\n\"
-                        f\"We've received your essay request (ID: {submission_id}).\\n\"
-                        f\"Current status: pending. We'll email you when the status changes.\\n\\n\"
-                        f\"Summary:\\n\"
-                        f\"- Type: {data.get('essay_type','')}\\n\"
-                        f\"- Subject: {data.get('subject','')}\\n\"
-                        f\"- Pages: {data.get('pages','')}\\n\"
-                        f\"- Deadline: {data.get('deadline','')}\\n\\n\"
-                        f\"Thank you,\\nEnglish Essay Writing Team\"
+                        f"Hello {student_name or 'there'},\n\n"
+                        f"We've received your essay request (ID: {submission_id}).\n"
+                        f"Current status: pending. We'll email you when the status changes.\n\n"
+                        f"Summary:\n"
+                        f"- Type: {data.get('essay_type','')}\n"
+                        f"- Subject: {data.get('subject','')}\n"
+                        f"- Pages: {data.get('pages','')}\n"
+                        f"- Deadline: {data.get('deadline','')}\n\n"
+                        f"Thank you,\nEnglish Essay Writing Team"
                     ),
                     reply_to=CONTACT_RECIPIENT or None
                 )
             if CONTACT_RECIPIENT:
                 _send_email(
                     to_email=CONTACT_RECIPIENT,
-                    subject=\"New submission received\",
+                    subject="New submission received",
                     body=(
-                        f\"A new submission was received.\\n\\n\"
-                        f\"ID: {submission_id}\\n\"
-                        f\"Student: {student_name} <{student_email}>\\n\"
-                        f\"Essay Type: {data.get('essay_type','')}\\n\"
-                        f\"Subject: {data.get('subject','')}\\n\"
-                        f\"Pages: {data.get('pages','')}\\n\"
-                        f\"Deadline: {data.get('deadline','')}\\n\"
+                        f"A new submission was received.\n\n"
+                        f"ID: {submission_id}\n"
+                        f"Student: {student_name} <{student_email}>\n"
+                        f"Essay Type: {data.get('essay_type','')}\n"
+                        f"Subject: {data.get('subject','')}\n"
+                        f"Pages: {data.get('pages','')}\n"
+                        f"Deadline: {data.get('deadline','')}\n"
                     )
                 )
         except Exception:
@@ -868,14 +868,14 @@ def update_status():
             if row:
                 first_name, last_name, email = row
                 if email:
-                    full_name = f\"{first_name} {last_name}\".strip()
+                    full_name = f"{first_name} {last_name}".strip()
                     _send_email(
                         to_email=email,
-                        subject=f\"Your submission status updated to {status}\",
+                        subject=f"Your submission status updated to {status}",
                         body=(
-                            f\"Hello {full_name or 'there'},\\n\\n\"
-                            f\"Your essay submission (ID: {submission_id}) status is now: {status}.\\n\\n\"
-                            f\"Thank you,\\nEnglish Essay Writing Team\"
+                            f"Hello {full_name or 'there'},\n\n"
+                            f"Your essay submission (ID: {submission_id}) status is now: {status}.\n\n"
+                            f"Thank you,\nEnglish Essay Writing Team"
                         ),
                         reply_to=CONTACT_RECIPIENT or None
                     )
