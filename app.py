@@ -391,6 +391,39 @@ def _send_contact_email(sender_email: str, message_text: str):
     except Exception as e:
         return False, str(e)
 
+def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
+    """Generic email sender using SMTP settings"""
+    if not SMTP_HOST or not to_email:
+        return False, 'Email not configured or recipient missing'
+
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['To'] = to_email
+    msg['From'] = SMTP_USER or (CONTACT_RECIPIENT or 'no-reply@example.com')
+    if reply_to:
+        msg['Reply-To'] = reply_to
+    msg.set_content(body)
+
+    try:
+        if SMTP_USE_TLS:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.ehlo()
+                try:
+                    server.starttls(context=ssl.create_default_context())
+                except smtplib.SMTPNotSupportedError:
+                    pass
+                if SMTP_USER and SMTP_PASS:
+                    server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                if SMTP_USER and SMTP_PASS:
+                    server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        return True, ''
+    except Exception as e:
+        return False, str(e)
+
 @app.route('/contact/send', methods=['POST'])
 def send_contact():
     data = request.get_json(silent=True) or request.form
@@ -510,6 +543,14 @@ def admin():
         ORDER BY created_at DESC
     ''')
     all_submissions = cursor.fetchall()
+
+    # Load reviews for admin dashboard
+    cursor.execute('''
+        SELECT id, name, university, rating, review_text, created_at
+        FROM reviews
+        ORDER BY created_at DESC
+    ''')
+    all_reviews = cursor.fetchall()
     
     # Check if admin password is set
     cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
@@ -524,7 +565,7 @@ def admin():
         'completed_submissions': completed_submissions
     }
     
-    return render_template('admin.html', stats=stats, submissions=all_submissions, password_set=password_set)
+    return render_template('admin.html', stats=stats, submissions=all_submissions, password_set=password_set, reviews=all_reviews)
 
 @app.route('/admin-setup')
 def admin_setup():
@@ -635,8 +676,47 @@ def submit_essay():
         
         conn.commit()
         conn.close()
+
+        # Send email notifications (best-effort)
+        student_email = (data['email'] or '').strip()
+        student_name = f\"{data.get('first_name','').strip()} {data.get('last_name','').strip()}\".strip()
+        submission_id = data['submission_id']
+        try:
+            if student_email:
+                _send_email(
+                    to_email=student_email,
+                    subject=f\"Submission received: {submission_id}\",
+                    body=(
+                        f\"Hello {student_name or 'there'},\\n\\n\"
+                        f\"We've received your essay request (ID: {submission_id}).\\n\"
+                        f\"Current status: pending. We'll email you when the status changes.\\n\\n\"
+                        f\"Summary:\\n\"
+                        f\"- Type: {data.get('essay_type','')}\\n\"
+                        f\"- Subject: {data.get('subject','')}\\n\"
+                        f\"- Pages: {data.get('pages','')}\\n\"
+                        f\"- Deadline: {data.get('deadline','')}\\n\\n\"
+                        f\"Thank you,\\nEnglish Essay Writing Team\"
+                    ),
+                    reply_to=CONTACT_RECIPIENT or None
+                )
+            if CONTACT_RECIPIENT:
+                _send_email(
+                    to_email=CONTACT_RECIPIENT,
+                    subject=\"New submission received\",
+                    body=(
+                        f\"A new submission was received.\\n\\n\"
+                        f\"ID: {submission_id}\\n\"
+                        f\"Student: {student_name} <{student_email}>\\n\"
+                        f\"Essay Type: {data.get('essay_type','')}\\n\"
+                        f\"Subject: {data.get('subject','')}\\n\"
+                        f\"Pages: {data.get('pages','')}\\n\"
+                        f\"Deadline: {data.get('deadline','')}\\n\"
+                    )
+                )
+        except Exception:
+            pass
         
-        return jsonify({'success': True, 'submission_id': data['submission_id']})
+        return jsonify({'success': True, 'submission_id': submission_id})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -780,8 +860,29 @@ def update_status():
         ''', (status, assigned_to, admin_notes, submission_id))
         
         conn.commit()
+
+        # Notify student about status update (best-effort)
+        try:
+            cursor.execute('SELECT first_name, last_name, email FROM essay_submissions WHERE id = ?', (submission_id,))
+            row = cursor.fetchone()
+            if row:
+                first_name, last_name, email = row
+                if email:
+                    full_name = f\"{first_name} {last_name}\".strip()
+                    _send_email(
+                        to_email=email,
+                        subject=f\"Your submission status updated to {status}\",
+                        body=(
+                            f\"Hello {full_name or 'there'},\\n\\n\"
+                            f\"Your essay submission (ID: {submission_id}) status is now: {status}.\\n\\n\"
+                            f\"Thank you,\\nEnglish Essay Writing Team\"
+                        ),
+                        reply_to=CONTACT_RECIPIENT or None
+                    )
+        except Exception:
+            pass
+
         conn.close()
-        
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -854,6 +955,28 @@ def bulk_update_status():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/admin/delete-review', methods=['POST'])
+@require_login
+def delete_review():
+    """Delete a review by id"""
+    try:
+        data = request.get_json()
+        review_id = data.get('review_id')
+        if not review_id:
+            return jsonify({'error': 'review_id is required'}), 400
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM reviews WHERE id = ?', (review_id,))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if deleted == 0:
+            return jsonify({'error': 'Review not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 @app.route('/admin/set-password', methods=['POST'])
 @require_login
 def admin_set_password():

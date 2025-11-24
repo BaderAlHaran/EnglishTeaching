@@ -6,6 +6,8 @@
     <title>Admin Dashboard - Essay Writing Service</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="alternate icon" href="/favicon.ico">
     <style>
         * {
             margin: 0;
@@ -716,6 +718,53 @@
                 </div>
             </div>
         </div>
+
+        <!-- Reviews Table -->
+        <div class="table-section" style="margin-top:24px">
+            <div class="table-header">
+                <h2 class="table-title">Student Reviews</h2>
+                <p class="table-subtitle">Recent reviews submitted on the website</p>
+            </div>
+
+            <div class="table-container">
+                {% if reviews %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>University</th>
+                            <th>Rating</th>
+                            <th>Review</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reviews %}
+                        <tr>
+                            <td data-label="Name">{{ r[1] }}</td>
+                            <td data-label="University">{{ r[2] }}</td>
+                            <td data-label="Rating">{{ r[3] }}</td>
+                            <td data-label="Review">{{ r[4] }}</td>
+                            <td data-label="Created">{{ r[5] }}</td>
+                            <td data-label="Actions">
+                                <div class="action-buttons">
+                                    <button class="action-btn edit" style="background:#fee2e2;color:#dc2626" onclick="deleteReview({{ r[0] }})" title="Delete">D</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No Reviews Yet</h3>
+                    <p>Reviews submitted by students will appear here.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <script>
@@ -828,6 +877,26 @@
                 if (d.success) alert('Password updated successfully');
                 else alert(d.error || 'Failed to update password');
             }).catch(()=>alert('Failed to update password'));
+        }
+
+        async function deleteReview(id) {
+            if (!confirm('Delete this review? This cannot be undone.')) return;
+            try {
+                const res = await fetch('/admin/delete-review', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ review_id: id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Failed to delete review');
+                }
+            } catch (e) {
+                alert('Failed to delete review');
+            }
         }
     </script>
 </body>
