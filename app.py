@@ -797,6 +797,28 @@ def edit_submission(submission_id):
         ''', (status, assigned_to, admin_notes, priority, submission_id))
         
         conn.commit()
+
+        # Email the student about the status update (also when updated from the edit page)
+        try:
+            cursor.execute('SELECT first_name, last_name, email, submission_id FROM essay_submissions WHERE id = ?', (submission_id,))
+            row = cursor.fetchone()
+            if row:
+                first_name, last_name, email, sub_id = row
+                if email:
+                    full_name = f"{first_name} {last_name}".strip()
+                    _send_email(
+                        to_email=email,
+                        subject=f"Your submission status updated to {status}",
+                        body=(
+                            f"Hello {full_name or 'there'},\n\n"
+                            f"Your essay submission (ID: {sub_id}) status is now: {status}.\n\n"
+                            f"Thank you,\nEnglish Essay Writing Team"
+                        ),
+                        reply_to=CONTACT_RECIPIENT or None
+                    )
+        except Exception:
+            pass
+
         conn.close()
         
         flash('Submission updated successfully!', 'success')
