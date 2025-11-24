@@ -2,6 +2,7 @@ services:
   - type: web
     name: essay-writing-service
     env: python
+    pythonVersion: 3.11.9
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT
     plan: free
@@ -16,9 +17,19 @@ services:
         generateValue: true
       - key: ADMIN_EMAIL
         value: admin@essaywritingservice.com
+      - key: CONTACT_RECIPIENT
+        value: norakalmutairi@gmail.com
       - key: UPLOAD_FOLDER
         value: uploads
-      - key: PORT
-        value: 10000
       - key: CUSTOM_DOMAIN
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_USE_TLS
+        value: "true"
