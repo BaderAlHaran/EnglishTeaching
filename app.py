@@ -14,6 +14,8 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 import logging
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 
@@ -34,6 +36,23 @@ CORS(app, origins=[
     "http://localhost:5000",
     "http://127.0.0.1:5000"
 ], supports_credentials=True)
+
+# Rate limiting (proxy-aware). Uses in-memory storage by default; set RATE_LIMIT_STORAGE to Redis for multi-instance.
+def _client_ip():
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr
+
+limiter = Limiter(
+    key_func=_client_ip,
+    app=app,
+    storage_uri=os.environ.get('RATE_LIMIT_STORAGE', 'memory://'),
+    default_limits=[
+        "300 per 5 minutes",
+        "1500 per hour"
+    ],
+)
 
 # Add custom domain support
 CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
@@ -58,6 +77,7 @@ def force_https():
 
 # Block access to dotfiles and common sensitive paths (defense-in-depth)
 @app.before_request
+@limiter.limit("30 per minute")
 def block_sensitive_paths():
     path_original = request.path or '/'
     path_lower = path_original.lower()
@@ -362,6 +382,7 @@ init_database()
 
 # Static file routes
 @app.route('/<path:filename>')
+@limiter.limit("60 per minute")
 def static_files(filename):
     """Serve static files (CSS, JS, images, etc.)"""
     if not filename.startswith('api/') and not filename.startswith('templates/'):
@@ -474,6 +495,7 @@ def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
         return False, str(e)
 
 @app.route('/contact/send', methods=['POST'])
+@limiter.limit("5 per minute")
 def send_contact():
     data = request.get_json(silent=True) or request.form
     sender_email = (data.get('email') or '').strip()
@@ -539,6 +561,7 @@ def sitemap_xml():
     return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -701,6 +724,7 @@ def admin_setup_post():
     return redirect(url_for('login'))
 
 @app.route('/submit-essay', methods=['POST'])
+@limiter.limit("10 per minute")
 def submit_essay():
     """Handle essay form submission with file upload"""
     try:
@@ -805,6 +829,7 @@ def submit_essay():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/submit-review', methods=['POST'])
+@limiter.limit("5 per minute")
 def submit_review():
     """Handle review submission"""
     try:
@@ -948,6 +973,7 @@ def download_file(submission_id):
 
 @app.route('/admin/update-status', methods=['POST'])
 @require_login
+@limiter.limit("60 per minute")
 def update_status():
     """Update submission status via AJAX"""
     try:
@@ -996,6 +1022,7 @@ def update_status():
 
 @app.route('/admin/delete-submission', methods=['POST'])
 @require_login
+@limiter.limit("30 per minute")
 def delete_submission():
     """Delete a submission only if its status is 'completed'. Removes file as well."""
     try:
