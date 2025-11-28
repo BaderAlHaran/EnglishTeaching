@@ -735,6 +735,7 @@
                             <th>Rating</th>
                             <th>Review</th>
                             <th>Created</th>
+                            <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -746,8 +747,18 @@
                             <td data-label="Rating">{{ r[3] }}</td>
                             <td data-label="Review">{{ r[4] }}</td>
                             <td data-label="Created">{{ r[5] }}</td>
+                            <td data-label="Status">
+                                {% if r[6] %}
+                                <span class="status-badge status-completed">Approved</span>
+                                {% else %}
+                                <span class="status-badge status-pending">Pending</span>
+                                {% endif %}
+                            </td>
                             <td data-label="Actions">
                                 <div class="action-buttons">
+                                    {% if not r[6] %}
+                                    <button class="action-btn complete" onclick="approveReview({{ r[0] }})" title="Approve">A</button>
+                                    {% endif %}
                                     <button class="action-btn edit" style="background:#fee2e2;color:#dc2626" onclick="deleteReview({{ r[0] }})" title="Delete">D</button>
                                 </div>
                             </td>
@@ -895,6 +906,25 @@
                 }
             } catch (e) {
                 alert('Failed to delete review');
+            }
+        }
+
+        async function approveReview(id) {
+            try {
+                const res = await fetch('/admin/approve-review', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ review_id: id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Failed to approve review');
+                }
+            } catch (e) {
+                alert('Failed to approve review');
             }
         }
     </script>

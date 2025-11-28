@@ -92,9 +92,15 @@ def set_security_headers(response):
     response.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "
-        "img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; "
+        # Allow Unsplash images used by the site
+        "img-src 'self' data: https://images.unsplash.com https://*.unsplash.com; "
+        # Allow Google Fonts CSS and Font Awesome CSS from cdnjs
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        # Allow font files from Google Fonts and cdnjs
+        "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        # Scripts: allow local and inline scripts used in admin template
+        "script-src 'self' 'unsafe-inline'; "
+        # API calls are local
         "connect-src 'self'"
     )
     return response
@@ -623,7 +629,7 @@ def admin():
 
     # Load reviews for admin dashboard
     cursor.execute('''
-        SELECT id, name, university, rating, review_text, created_at
+        SELECT id, name, university, rating, review_text, created_at, is_approved
         FROM reviews
         ORDER BY created_at DESC
     ''')
@@ -815,9 +821,9 @@ def submit_review():
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO reviews (name, university, rating, review_text)
-            VALUES (?, ?, ?, ?)
-        ''', (data['name'], data['university'], data['rating'], data['review_text']))
+            INSERT INTO reviews (name, university, rating, review_text, is_approved)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (data['name'], data['university'], data['rating'], data['review_text'], 0))
         
         conn.commit()
         conn.close()
@@ -1074,6 +1080,29 @@ def delete_review():
         conn.close()
 
         if deleted == 0:
+            return jsonify({'error': 'Review not found'}), 404
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/approve-review', methods=['POST'])
+@require_login
+def approve_review():
+    """Approve a review by id (makes it visible publicly)."""
+    try:
+        data = request.get_json()
+        review_id = data.get('review_id')
+        if not review_id:
+            return jsonify({'error': 'review_id is required'}), 400
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('UPDATE reviews SET is_approved = 1 WHERE id = ?', (review_id,))
+        updated = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if updated == 0:
             return jsonify({'error': 'Review not found'}), 404
         return jsonify({'success': True})
     except Exception as e:
