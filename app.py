@@ -56,6 +56,49 @@ def force_https():
     if not app.debug and request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), code=301)
 
+# Block access to dotfiles and common sensitive paths (defense-in-depth)
+@app.before_request
+def block_sensitive_paths():
+    path_original = request.path or '/'
+    path_lower = path_original.lower()
+
+    # Block any path accessing dotfiles (e.g., /.env, /.git/config, /dir/.env)
+    if path_lower.startswith('/.') or '/.' in path_lower:
+        return jsonify({'error': 'Not found'}), 404
+
+    # Block direct access to PHP files or phpinfo-like endpoints (we don't serve PHP)
+    if path_lower.endswith('.php') or path_lower in {'/phpinfo', '/_profiler/phpinfo'}:
+        return jsonify({'error': 'Not found'}), 404
+
+    # Explicit blocklist for common secret files
+    sensitive_exact = {
+        '/.env',
+        '/.env.local',
+        '/.env.production',
+        '/.env.remote',
+        '/.git/config',
+    }
+    if path_lower in sensitive_exact or path_lower.startswith('/.git/'):
+        return jsonify({'error': 'Not found'}), 404
+
+# Set baseline security headers on all responses
+@app.after_request
+def set_security_headers(response):
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'no-referrer-when-downgrade')
+    response.headers.setdefault('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+    # Content Security Policy tuned for this app's static assets
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "connect-src 'self'"
+    )
+    return response
+
 # File upload configuration
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'doc', 'docx', 'rtf', 'odt'}
