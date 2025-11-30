@@ -159,7 +159,9 @@ def waf_and_host_checks():
 
     # Suspicious User-Agent block
     ua = (request.headers.get('User-Agent') or '').lower()
-    if any(p in ua for p in _SUSPICIOUS_UA_PARTS):
+    # Allowlist well-known crawlers to prevent false positives (e.g., sitemap fetches)
+    _good_bots = ('googlebot', 'adsbot-google', 'google-inspectiontool', 'bingbot', 'duckduckbot', 'slurp', 'yandexbot', 'baiduspider')
+    if any(p in ua for p in _SUSPICIOUS_UA_PARTS) and not any(g in ua for g in _good_bots):
         _log_block('suspicious user-agent')
         _record_event(ip, '403'); _maybe_ban(ip)
         abort(403)
