@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory, abort
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import sqlite3
 import hashlib
@@ -14,8 +14,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 import logging
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+
 import time
 from collections import deque
 
@@ -39,84 +38,7 @@ CORS(app, origins=[
     "http://127.0.0.1:5000"
 ], supports_credentials=True)
 
-# Rate limiting (proxy-aware). Uses in-memory storage by default; set RATE_LIMIT_STORAGE to Redis for multi-instance.
-def _client_ip():
-    xff = request.headers.get('X-Forwarded-For', '')
-    if xff:
-        return xff.split(',')[0].strip()
-    return request.remote_addr
 
-limiter = Limiter(
-    key_func=_client_ip,
-    app=app,
-    storage_uri=os.environ.get('RATE_LIMIT_STORAGE', 'memory://'),
-    default_limits=[
-        "30 per minute"
-    ],
-)
-
-# ----------------------
-# Auto-ban and WAF utils
-# ----------------------
-_banlist = {}  # ip -> ban_until_epoch
-_events = {}   # ip -> {'404': deque[timestamps], '403': deque[timestamps]}
-
-def _now():
-    return time.time()
-
-def _ensure_ip(ip):
-    if ip not in _events:
-        _events[ip] = {'404': deque(), '403': deque()}
-
-def _prune(deq, window_seconds):
-    cutoff = _now() - window_seconds
-    while deq and deq[0] < cutoff:
-        deq.popleft()
-
-def _record_event(ip, kind):
-    _ensure_ip(ip)
-    dq = _events[ip][kind]
-    dq.append(_now())
-
-def _check_ban(ip):
-    until = _banlist.get(ip)
-    return until and until > _now()
-
-def _maybe_ban(ip):
-    _ensure_ip(ip)
-    dq404 = _events[ip]['404']
-    dq403 = _events[ip]['403']
-    _prune(dq404, 30)
-    _prune(dq403, 30)
-    if len(dq404) >= 20 or len(dq403) >= 10:
-        _banlist[ip] = _now() + 10 * 60  # 10 minutes
-
-def _log_block(reason):
-    app.logger.warning(f"[BLOCK] ts={datetime.utcnow().isoformat()} ip={_client_ip()} path={request.full_path} ua={request.headers.get('User-Agent','-')} reason={reason}")
-
-# Allowed hosts validation
-ALLOWED_HOSTS = set([h.strip().lower() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()])
-CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
-if CUSTOM_DOMAIN:
-    ALLOWED_HOSTS.update({CUSTOM_DOMAIN.lower(), f"www.{CUSTOM_DOMAIN.lower()}"})
-if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS.update({'localhost', '127.0.0.1'})
-
-# WAF signature and sensitive patterns
-_SUSPICIOUS_UA_PARTS = ('httpx', 'python', 'curl', 'wget', 'scanner', 'bot', 'requests')
-_WAF_SIGNATURES = (
-    'phpinfo', 'aws.json', 'docker-compose', 'kubernetes', 'gcloud',
-    'secrets', 'config.yml', 'credentials', 'application.yml'
-)
-_SENSITIVE_PATTERNS = (
-    '.env', '/env', '/.env', '/.env.', '/.git', '.aws', '.gcloud', 'application.yml',
-    'dockerfile', 'docker-compose', 'web.config', 'app.config', 'config.', '/config/',
-    'secrets', 'keys', 'credentials'
-)
-_SENSITIVE_EXTS = ('.env', '.yml', '.yaml', '.json', '.ini', '.cfg', '.properties')
-_LOGFILE_EXTS = ('.log', '.txt')
-_LOGFILE_NAMES = ('error.log', 'php_error.log')
-_NO_LISTING_DIRS = ('static', 'uploads', 'public')
 
 # Add custom domain support
 CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
@@ -139,56 +61,7 @@ def force_https():
     if not app.debug and request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), code=301)
 
-# WAF + Host validation + Sensitive file blocking
-@app.before_request
-def waf_and_host_checks():
-    ip = _client_ip()
-    if _check_ban(ip):
-        _log_block('auto-ban')
-        abort(403)
 
-    # Host header validation
-    host = (request.headers.get('Host') or '').split(':')[0].lower()
-    if ALLOWED_HOSTS and host not in ALLOWED_HOSTS and not host.endswith('.onrender.com'):
-        _log_block(f'bad host {host}')
-        abort(400)
-
-    path_original = request.path or '/'
-    path_lower = path_original.lower()
-    full_lower = (request.full_path or request.path).lower()
-
-    # Suspicious User-Agent block
-    ua = (request.headers.get('User-Agent') or '').lower()
-    # Allowlist well-known crawlers to prevent false positives (e.g., sitemap fetches)
-    _good_bots = ('googlebot', 'adsbot-google', 'google-inspectiontool', 'bingbot', 'duckduckbot', 'slurp', 'yandexbot', 'baiduspider')
-    if any(p in ua for p in _SUSPICIOUS_UA_PARTS) and not any(g in ua for g in _good_bots):
-        _log_block('suspicious user-agent')
-        _record_event(ip, '403'); _maybe_ban(ip)
-        abort(403)
-
-    # Block any path accessing dotfiles (e.g., /.env, /.git/config, /dir/.env)
-    if path_lower.startswith('/.') or '/.' in path_lower:
-        _log_block('dotfile')
-        _record_event(ip, '403'); _maybe_ban(ip)
-        abort(403)
-
-    # Block direct access to PHP files or phpinfo-like endpoints (we don't serve PHP)
-    if path_lower.endswith('.php') or path_lower in {'/phpinfo', '/_profiler/phpinfo', '/php_info.php', '/test.php'}:
-        _log_block('php access')
-        _record_event(ip, '403'); _maybe_ban(ip)
-        abort(403)
-
-    # Sensitive file patterns and extensions
-    if any(sig in full_lower for sig in _WAF_SIGNATURES) or any(p in full_lower for p in _SENSITIVE_PATTERNS) or full_lower.endswith(_SENSITIVE_EXTS):
-        _log_block('sensitive pattern')
-        _record_event(ip, '403'); _maybe_ban(ip)
-        abort(403)
-
-    # Log file access block (allow robots.txt)
-    if (full_lower.endswith(_LOGFILE_EXTS) or any(n in full_lower for n in _LOGFILE_NAMES) or '/logs/' in full_lower) and not full_lower.endswith('/robots.txt'):
-        _log_block('log file access')
-        _record_event(ip, '403'); _maybe_ban(ip)
-        abort(403)
 
 # Set baseline security headers on all responses
 @app.after_request
@@ -472,30 +345,18 @@ init_database()
 
 # Static file routes
 @app.route('/<path:filename>')
-@limiter.limit("10 per minute")
 def static_files(filename):
     """Serve static files (CSS, JS, images, etc.)"""
     if not filename.startswith('api/') and not filename.startswith('templates/'):
         try:
-            # Disable directory listing for specific folders
-            normalized = filename.rstrip('/').lower()
-            if normalized in _NO_LISTING_DIRS:
-                _log_block('directory listing attempt')
-                _record_event(_client_ip(), '403'); _maybe_ban(_client_ip())
-                abort(403)
-
-            # Check if it's an allowed static file
-            if filename.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp')):
+            # Check if it's a static file
+            if filename.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf')):
                 return send_from_directory('.', filename)
             else:
-                _log_block('disallowed static extension')
-                _record_event(_client_ip(), '403'); _maybe_ban(_client_ip())
-                abort(403)
+                return jsonify({'error': 'Not found'}), 404
         except FileNotFoundError:
-            _record_event(_client_ip(), '404'); _maybe_ban(_client_ip())
-            return jsonify({'error': 'Not found'}), 404
+            return jsonify({'error': 'File not found'}), 404
     else:
-        _record_event(_client_ip(), '404'); _maybe_ban(_client_ip())
         return jsonify({'error': 'Not found'}), 404
 
 # Routes
@@ -596,7 +457,6 @@ def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
         return False, str(e)
 
 @app.route('/contact/send', methods=['POST'])
-@limiter.limit("5 per minute")
 def send_contact():
     data = request.get_json(silent=True) or request.form
     sender_email = (data.get('email') or '').strip()
@@ -662,14 +522,9 @@ def sitemap_xml():
     return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
 
 # 404 honeypot handler
-@app.errorhandler(404)
-def handle_404(e):
-    _record_event(_client_ip(), '404'); _maybe_ban(_client_ip())
-    _log_block('404 not found')
-    return jsonify({'error': 'Not found'}), 404
+
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute")
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -832,7 +687,6 @@ def admin_setup_post():
     return redirect(url_for('login'))
 
 @app.route('/submit-essay', methods=['POST'])
-@limiter.limit("10 per minute")
 def submit_essay():
     """Handle essay form submission with file upload"""
     try:
@@ -937,7 +791,6 @@ def submit_essay():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/submit-review', methods=['POST'])
-@limiter.limit("5 per minute")
 def submit_review():
     """Handle review submission"""
     try:
@@ -1081,7 +934,6 @@ def download_file(submission_id):
 
 @app.route('/admin/update-status', methods=['POST'])
 @require_login
-@limiter.limit("60 per minute")
 def update_status():
     """Update submission status via AJAX"""
     try:
@@ -1130,7 +982,6 @@ def update_status():
 
 @app.route('/admin/delete-submission', methods=['POST'])
 @require_login
-@limiter.limit("30 per minute")
 def delete_submission():
     """Delete a submission only if its status is 'completed'. Removes file as well."""
     try:
