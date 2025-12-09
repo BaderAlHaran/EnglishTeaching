@@ -595,6 +595,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add loading complete class
   document.body.classList.add('loaded');
   
+  // Strip tracking query params from URL (e.g., utm_source=chatgpt.com)
+  try {
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+    const removeList = [];
+    params.forEach((_, key) => {
+      const k = key.toLowerCase();
+      if (k.startsWith('utm_') || ['ref', 'referrer', 'gclid', 'fbclid', 'mc_cid', 'mc_eid'].includes(k)) {
+        removeList.push(key);
+      }
+    });
+    if (removeList.length > 0) {
+      removeList.forEach((k) => params.delete(k));
+      const newQuery = params.toString();
+      const newUrl = url.origin + url.pathname + (newQuery ? `?${newQuery}` : '') + url.hash;
+      window.history.replaceState({}, '', newUrl);
+    }
+  } catch (e) {
+    // no-op
+  }
+  
   console.log('EssayPro website initialized successfully!');
 });
 
