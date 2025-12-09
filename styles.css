@@ -812,8 +812,9 @@ button {
 
 .seo-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--space-8);
+  align-items: stretch;
 }
 
 .seo-card {
@@ -823,6 +824,9 @@ button {
   box-shadow: var(--shadow-md);
   padding: var(--space-8);
   transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .seo-card:hover {
