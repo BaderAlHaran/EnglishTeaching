@@ -9,22 +9,27 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="apple-touch-icon" href="/favicon.svg">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="alternate icon" href="/favicon.ico">
     <link rel="canonical" href="https://englishessaywriting.net/">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" imagesrcset="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80&fm=webp 1000w, https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp 2070w" imagesizes="(max-width: 768px) 100vw, 50vw">
 
     <!-- Open Graph -->
     <meta property="og:title" content="Free Academic Essay Writing Services">
     <meta property="og:description" content="Expert essay writing, research papers, dissertations, and editing — fast, free, and plagiarism-free.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://englishessaywriting.net/">
-    <meta property="og:image" content="https://englishessaywriting.net/your-image.jpg">
+    <meta property="og:image" content="https://englishessaywriting.net/logo.svg">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
@@ -57,13 +62,78 @@
       "description": "Professional essay writing, research papers, assignments, dissertations, editing and proofreading services."
     }
     </script>
+
+    <!-- WebSite Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "url": "https://englishessaywriting.net/",
+      "name": "EnglishEssayWriting.net",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.google.com/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+
+    <!-- FAQPage Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is your essay writing service really free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. We provide free academic essay writing and editing support. There are no hidden fees."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Are the essays plagiarism-free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Every paper is written from scratch and checked with anti-plagiarism tools before delivery."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How fast can you deliver my paper?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Many orders are completed within 24–48 hours depending on length and complexity."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which subjects do you cover?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "We handle most academic subjects, including humanities, social sciences, business, and STEM."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can you help with research papers and assignments?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. We assist with research paper writing, assignment help, dissertations, and proofreading."
+          }
+        }
+      ]
+    }
+    </script>
 </head>
 <body>
     <!-- Header -->
     <header class="header">
         <nav class="nav container">
             <div class="nav__brand">
-                <h1 class="nav__logo">English Essay Writing</h1>
+                <div class="nav__logo" role="heading" aria-level="2">English Essay Writing</div>
             </div>
             <ul class="nav__menu" id="nav-menu">
                 <li class="nav__item">
@@ -105,15 +175,46 @@
             </div>
             <div class="hero__visual">
                 <div class="hero__background">
-                    <img src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" 
-                         alt="Academic books and study materials" class="hero__bg-image">
+                    <img loading="eager" fetchpriority="high" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" 
+                         alt="Academic books and study materials on a desk" class="hero__bg-image" width="2070" height="1100">
                 </div>
                 <div class="hero__foreground">
-                    <img src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80" 
-                         alt="Open books and notebooks" class="hero__fg-image">
+                    <img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80&fm=webp" 
+                         alt="Open books and notebooks arranged neatly" class="hero__fg-image" width="1000" height="700">
                 </div>
             </div>
         </div>
+    </section>
+
+    <!-- SEO Content -->
+    <section class="container" style="padding: 3rem 0">
+        <h2>Why Choose Our Free Essay Writing Services?</h2>
+        <p>We provide reliable, student‑focused support designed to make academic success simpler and stress‑free. Our essay writing services are delivered by professional writers with degree‑level expertise and a commitment to quality. Every paper is written from scratch, checked for accuracy, and verified as <strong>plagiarism‑free</strong> before delivery.</p>
+        <ul>
+            <li><strong>Professional writers</strong> with real academic experience</li>
+            <li><strong>Fast delivery</strong> for urgent deadlines without sacrificing quality</li>
+            <li><strong>Transparent</strong> communication and clear expectations</li>
+            <li><strong>Privacy</strong> and secure handling of your information</li>
+        </ul>
+
+        <h2>What We Offer</h2>
+        <p>Whether you need <em>research paper writing</em>, <em>assignment help</em>, or detailed editing, our team supports all major subjects and academic levels. We’ve built a simple process that keeps you in control and ensures each order meets the brief.</p>
+        <ul>
+            <li>Custom essays tailored to your topic and rubric</li>
+            <li>Research papers with credible sources and proper citations</li>
+            <li>Editing and proofreading for clarity, flow, and grammar</li>
+            <li>Support for dissertations, reports, and presentations</li>
+        </ul>
+
+        <h2>How Our Essay Service Works</h2>
+        <p>Getting help is quick and straightforward. Share your requirements, choose preferences, and we’ll assign a qualified writer. You’ll receive a polished draft on time—formatted, referenced, and ready to submit.</p>
+        <ol>
+            <li>Submit your topic, deadline, and instructions</li>
+            <li>We match your order with a specialist writer</li>
+            <li>Your paper is written, reviewed, and <strong>plagiarism‑checked</strong></li>
+            <li>Receive your work with <strong>fast delivery</strong> and free revisions if needed</li>
+        </ol>
+        <p>If you’re looking for dependable <strong>academic writing help</strong> that’s free, fast, and professionally written—our platform is built for you.</p>
     </section>
 
 
@@ -312,8 +413,8 @@
     <!-- CTA Section -->
     <section id="about" class="cta">
         <div class="cta__background">
-            <img src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" 
-                 alt="Desk with papers" class="cta__bg-image">
+            <img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" 
+                 alt="Desk with papers" class="cta__bg-image" width="2070" height="1100">
         </div>
         <div class="container">
             <div class="cta__content">
