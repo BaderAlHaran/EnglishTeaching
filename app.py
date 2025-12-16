@@ -496,6 +496,15 @@ def google_site_verification():
         {'Content-Type': 'text/html; charset=utf-8'}
     )
 
+@app.route('/google308cceed71efd1b6.html')
+def google_site_verification_new():
+    """Serve Google Search Console verification file (current token)"""
+    return (
+        'google-site-verification: google308cceed71efd1b6.html',
+        200,
+        {'Content-Type': 'text/html; charset=utf-8'}
+    )
+
 @app.route('/robots.txt')
 def robots_txt():
     """Robots file allowing crawl and pointing to sitemap"""
