@@ -343,23 +343,7 @@ def require_login(f):
 # Initialize database
 init_database()
 
-# Static file routes
-@app.route('/<path:filename>')
-def static_files(filename):
-    """Serve static files (CSS, JS, images, etc.)"""
-    if not filename.startswith('api/') and not filename.startswith('templates/'):
-        try:
-            # Check if it's a static file
-            if filename.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf')):
-                return send_from_directory('.', filename)
-            else:
-                return jsonify({'error': 'Not found'}), 404
-        except FileNotFoundError:
-            return jsonify({'error': 'File not found'}), 404
-    else:
-        return jsonify({'error': 'Not found'}), 404
-
-# Routes
+# Routes - Define specific routes BEFORE catch-all route
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -383,6 +367,47 @@ def privacy():
 @app.route('/contact')
 def contact():
     return send_from_directory('.', 'contact.html')
+
+@app.route('/robots.txt')
+def robots_txt():
+    """Robots file allowing crawl and pointing to sitemap"""
+    base = request.url_root.rstrip('/')
+    content = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    return (content, 200, {'Content-Type': 'text/plain; charset=utf-8'})
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    """Simple dynamic sitemap covering key pages"""
+    base = request.url_root.rstrip('/')
+    urls = [
+        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy"
+    ]
+    items = "\n".join(
+        f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{items}\n"
+        "</urlset>\n"
+    )
+    return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
+
+# Static file routes - Must be AFTER specific routes
+@app.route('/<path:filename>')
+def static_files(filename):
+    """Serve static files (CSS, JS, images, etc.)"""
+    if not filename.startswith('api/') and not filename.startswith('templates/'):
+        try:
+            # Check if it's a static file
+            if filename.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.xml', '.txt', '.json')):
+                return send_from_directory('.', filename)
+            else:
+                return jsonify({'error': 'Not found'}), 404
+        except FileNotFoundError:
+            return jsonify({'error': 'File not found'}), 404
+    else:
+        return jsonify({'error': 'Not found'}), 404
 
 def _send_contact_email(sender_email: str, message_text: str):
     if not SMTP_HOST or not CONTACT_RECIPIENT:
@@ -504,31 +529,6 @@ def google_site_verification_new():
         200,
         {'Content-Type': 'text/html; charset=utf-8'}
     )
-
-@app.route('/robots.txt')
-def robots_txt():
-    """Robots file allowing crawl and pointing to sitemap"""
-    base = request.url_root.rstrip('/')
-    content = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
-    return (content, 200, {'Content-Type': 'text/plain; charset=utf-8'})
-
-@app.route('/sitemap.xml')
-def sitemap_xml():
-    """Simple dynamic sitemap covering key pages"""
-    base = request.url_root.rstrip('/')
-    urls = [
-        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy"
-    ]
-    items = "\n".join(
-        f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
-    )
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"{items}\n"
-        "</urlset>\n"
-    )
-    return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
 
 # 404 honeypot handler
 
