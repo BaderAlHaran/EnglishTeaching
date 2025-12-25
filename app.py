@@ -80,11 +80,11 @@ def set_security_headers(response):
         # Allow Google Fonts CSS and Font Awesome CSS from cdnjs
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
         # Allow font files from Google Fonts and cdnjs
-        "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' data: https://fonts.gstatic.com https://*.gstatic.com https://cdnjs.cloudflare.com; "
         # Scripts: allow local and inline scripts used in admin template
         "script-src 'self' 'unsafe-inline'; "
-        # API calls are local
-        "connect-src 'self'"
+        # API calls and font loading connections
+        "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://*.gstatic.com https://cdnjs.cloudflare.com"
     )
     return response
 
