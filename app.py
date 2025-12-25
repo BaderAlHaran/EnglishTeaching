@@ -368,6 +368,10 @@ def privacy():
 def contact():
     return send_from_directory('.', 'contact.html')
 
+@app.route('/faq')
+def faq():
+    return send_from_directory('.', 'faq.html')
+
 @app.route('/robots.txt')
 def robots_txt():
     """Robots file allowing crawl and pointing to sitemap"""
@@ -380,7 +384,7 @@ def sitemap_xml():
     """Simple dynamic sitemap covering key pages"""
     base = request.url_root.rstrip('/')
     urls = [
-        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy"
+        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/faq"
     ]
     items = "\n".join(
         f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
