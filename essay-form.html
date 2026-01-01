@@ -68,7 +68,12 @@
     <section class="essay__form-section">
         <div class="container">
             <div class="form__container">
-                <form class="essay__form" id="essayForm">
+                <form class="essay__form" id="essayForm" action="/submit" method="post">
+                    <!-- Honeypot field to deter bots -->
+                    <div class="form__group" style="display:none;" aria-hidden="true">
+                        <label for="website">Website</label>
+                        <input type="text" id="website" name="website" autocomplete="off" tabindex="-1">
+                    </div>
                     <!-- Personal Information -->
                     <div class="form__section">
                         <h3 class="form__section-title">Personal Information</h3>
@@ -320,6 +325,13 @@
                     return;
                 }
             }
+
+            const email = formData.get('email');
+            const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Please enter a valid email address.');
+                return;
+            }
             
             if (!formData.get('terms')) {
                 alert('Please accept the terms and conditions.');
@@ -328,7 +340,7 @@
             
             try {
                 // Submit to simplified backend with file upload
-                const response = await fetch('/submit-essay', {
+                const response = await fetch('/submit', {
                     method: 'POST',
                     body: formData
                 });

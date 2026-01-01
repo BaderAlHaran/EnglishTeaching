@@ -10,10 +10,8 @@ import uuid
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import re
-import smtplib
-import ssl
-from email.message import EmailMessage
 import logging
+import resend
 
 import time
 from collections import deque
@@ -105,12 +103,13 @@ DATABASE_URL = os.environ.get('DATABASE_URL')  # e.g. postgres://user:pass@host/
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'mikoandnenoarecool')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', secrets.token_urlsafe(32))
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@essaywriting.com')
-SMTP_HOST = os.environ.get('SMTP_HOST', '')
-SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
-SMTP_USER = os.environ.get('SMTP_USER', '')
-SMTP_PASS = os.environ.get('SMTP_PASS', '')
-SMTP_USE_TLS = os.environ.get('SMTP_USE_TLS', 'true').lower() in ('1', 'true', 'yes')
-CONTACT_RECIPIENT = os.environ.get('CONTACT_RECIPIENT', 'baderbob123@gmail.com')
+FROM_EMAIL = os.environ.get('FROM_EMAIL', ADMIN_EMAIL)
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+CONTACT_RECIPIENT = os.environ.get('CONTACT_RECIPIENT', ADMIN_EMAIL)
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 # Never log credentials
 
@@ -414,7 +413,8 @@ def static_files(filename):
         return jsonify({'error': 'Not found'}), 404
 
 def _send_contact_email(sender_email: str, message_text: str):
-    if not SMTP_HOST or not CONTACT_RECIPIENT:
+    admin_recipient = ADMIN_EMAIL or CONTACT_RECIPIENT
+    if not admin_recipient:
         return False, 'Email not configured on server'
 
     subject = 'New contact form message'
@@ -425,65 +425,32 @@ def _send_contact_email(sender_email: str, message_text: str):
         f"Message:\n{message_text}\n"
     )
 
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['To'] = CONTACT_RECIPIENT
-    msg['From'] = SMTP_USER or sender_email
-    msg['Reply-To'] = sender_email
-    msg.set_content(body)
-
-    try:
-        if SMTP_USE_TLS:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                server.ehlo()
-                try:
-                    server.starttls(context=ssl.create_default_context())
-                except smtplib.SMTPNotSupportedError:
-                    pass
-                if SMTP_USER and SMTP_PASS:
-                    server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                if SMTP_USER and SMTP_PASS:
-                    server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-        return True, ''
-    except Exception as e:
-        return False, str(e)
+    return _send_email(to_email=admin_recipient, subject=subject, body=body, reply_to=sender_email)
 
 def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
-    """Generic email sender using SMTP settings"""
-    if not SMTP_HOST or not to_email:
+    """Generic email sender using Resend"""
+    if not RESEND_API_KEY or not FROM_EMAIL or not to_email:
         return False, 'Email not configured or recipient missing'
 
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['To'] = to_email
-    msg['From'] = SMTP_USER or (CONTACT_RECIPIENT or 'no-reply@example.com')
+    recipients = [to_email] if isinstance(to_email, str) else [addr for addr in to_email if addr]
+    if not recipients:
+        return False, 'Email recipient missing'
+
+    payload = {
+        "from": FROM_EMAIL,
+        "to": recipients,
+        "subject": subject,
+        "text": body
+    }
     if reply_to:
-        msg['Reply-To'] = reply_to
-    msg.set_content(body)
+        payload["reply_to"] = [reply_to]
 
     try:
-        if SMTP_USE_TLS:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                server.ehlo()
-                try:
-                    server.starttls(context=ssl.create_default_context())
-                except smtplib.SMTPNotSupportedError:
-                    pass
-                if SMTP_USER and SMTP_PASS:
-                    server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                if SMTP_USER and SMTP_PASS:
-                    server.login(SMTP_USER, SMTP_PASS)
-                server.send_message(msg)
+        resend.Emails.send(payload)
         return True, ''
     except Exception as e:
-        return False, str(e)
+        app.logger.error("Resend email failed: %s", e)
+        return False, 'Unable to send email right now. Please try again later.'
 
 @app.route('/contact/send', methods=['POST'])
 def send_contact():
@@ -494,7 +461,7 @@ def send_contact():
     if not sender_email or not message_text:
         return jsonify({'success': False, 'error': 'email and message are required'}), 400
 
-    if '@' not in sender_email or '.' not in sender_email.split('@')[-1]:
+    if not EMAIL_REGEX.match(sender_email):
         return jsonify({'success': False, 'error': 'invalid email'}), 400
 
     ok, err = _send_contact_email(sender_email, message_text)
@@ -699,25 +666,35 @@ def admin_setup_post():
     flash('Password set successfully! You can now log in.', 'success')
     return redirect(url_for('login'))
 
+@app.route('/submit', methods=['POST'])
 @app.route('/submit-essay', methods=['POST'])
 def submit_essay():
     """Handle essay form submission with file upload"""
     try:
+        # Honeypot to deter bots
+        if request.form.get('website'):
+            app.logger.info("Honeypot field triggered; ignoring submission.")
+            return jsonify({'success': True}), 200
+
         # Get form data
         data = {
             'submission_id': secrets.token_hex(8),
-            'first_name': request.form.get('firstName'),
-            'last_name': request.form.get('lastName'),
-            'email': request.form.get('email'),
-            'phone': request.form.get('phone'),
-            'essay_type': request.form.get('essayType'),
-            'academic_level': request.form.get('academicLevel'),
-            'subject': request.form.get('subject'),
-            'pages': request.form.get('pages'),
-            'deadline': request.form.get('deadline'),
-            'topic': request.form.get('topic'),
-            'instructions': request.form.get('instructions'),
-            'citation_style': request.form.get('citationStyle')
+            'first_name': (request.form.get('firstName') or '').strip(),
+            'last_name': (request.form.get('lastName') or '').strip(),
+            'email': (request.form.get('email') or '').strip(),
+            'phone': (request.form.get('phone') or '').strip(),
+            'essay_type': (request.form.get('essayType') or '').strip(),
+            'academic_level': (request.form.get('academicLevel') or '').strip(),
+            'subject': (request.form.get('subject') or '').strip(),
+            'pages': (request.form.get('pages') or '').strip(),
+            'deadline': (request.form.get('deadline') or '').strip(),
+            'topic': (request.form.get('topic') or '').strip(),
+            'instructions': (request.form.get('instructions') or '').strip(),
+            'citation_style': (request.form.get('citationStyle') or '').strip(),
+            'writer_preference': (request.form.get('writerPreference') or '').strip(),
+            'sources': (request.form.get('sources') or '').strip(),
+            'newsletter': request.form.get('newsletter', ''),
+            'terms': request.form.get('terms')
         }
         
         # Validate required fields
@@ -725,6 +702,12 @@ def submit_essay():
         for field in required_fields:
             if not data[field]:
                 return jsonify({'error': f'{field} is required'}), 400
+
+        if not EMAIL_REGEX.match(data['email']):
+            return jsonify({'error': 'invalid email'}), 400
+
+        if not data['terms']:
+            return jsonify({'error': 'Please accept the terms and conditions'}), 400
         
         # Handle file upload
         file_path = None
@@ -759,49 +742,69 @@ def submit_essay():
         conn.commit()
         conn.close()
 
-        # Send email notifications (best-effort)
-        student_email = (data['email'] or '').strip()
+        # Send email notifications
+        student_email = data['email']
         student_name = f"{data.get('first_name','').strip()} {data.get('last_name','').strip()}".strip()
         submission_id = data['submission_id']
-        try:
-            if student_email:
-                _send_email(
-                    to_email=student_email,
-                    subject=f"Submission received: {submission_id}",
-                    body=(
-                        f"Hello {student_name or 'there'},\n\n"
-                        f"We've received your essay request (ID: {submission_id}).\n"
-                        f"Current status: pending. We'll email you when the status changes.\n\n"
-                        f"Summary:\n"
-                        f"- Type: {data.get('essay_type','')}\n"
-                        f"- Subject: {data.get('subject','')}\n"
-                        f"- Pages: {data.get('pages','')}\n"
-                        f"- Deadline: {data.get('deadline','')}\n\n"
-                        f"Thank you,\nEnglish Essay Writing Team"
-                    ),
-                    reply_to=CONTACT_RECIPIENT or None
-                )
-            if CONTACT_RECIPIENT:
-                _send_email(
-                    to_email=CONTACT_RECIPIENT,
-                    subject="New submission received",
-                    body=(
-                        f"A new submission was received.\n\n"
-                        f"ID: {submission_id}\n"
-                        f"Student: {student_name} <{student_email}>\n"
-                        f"Essay Type: {data.get('essay_type','')}\n"
-                        f"Subject: {data.get('subject','')}\n"
-                        f"Pages: {data.get('pages','')}\n"
-                        f"Deadline: {data.get('deadline','')}\n"
-                    )
-                )
-        except Exception:
-            pass
+
+        admin_body_lines = [
+            "New essay submission received.",
+            f"Submission ID: {submission_id}",
+            f"Name: {student_name or 'N/A'}",
+            f"Email: {student_email}",
+            f"Phone: {data.get('phone') or 'N/A'}",
+            f"Essay Type: {data.get('essay_type')}",
+            f"Academic Level: {data.get('academic_level')}",
+            f"Subject: {data.get('subject')}",
+            f"Pages: {data.get('pages')}",
+            f"Deadline: {data.get('deadline')}",
+            f"Topic: {data.get('topic')}",
+            f"Citation Style: {data.get('citation_style') or 'N/A'}",
+            f"Writer Preference: {data.get('writer_preference') or 'N/A'}",
+            f"Required Sources: {data.get('sources') or 'N/A'}",
+            f"Newsletter Opt-in: {'Yes' if data.get('newsletter') else 'No'}",
+            f"File Uploaded: {file_name or 'No file'}" + (f" ({file_size} bytes)" if file_size else ''),
+            "",
+            "Instructions:",
+            data.get('instructions') or 'None provided'
+        ]
+
+        admin_ok, admin_err = _send_email(
+            to_email=ADMIN_EMAIL or CONTACT_RECIPIENT,
+            subject="New submission received",
+            body="\n".join(admin_body_lines),
+            reply_to=student_email
+        )
+
+        if not admin_ok:
+            app.logger.error("Admin notification email failed: %s", admin_err)
+            return jsonify({'error': 'Unable to send confirmation emails right now. Please try again shortly.'}), 500
+
+        student_ok, student_err = _send_email(
+            to_email=student_email,
+            subject=f"Submission received: {submission_id}",
+            body=(
+                f"Hello {student_name or 'there'},\n\n"
+                f"We've received your essay request (ID: {submission_id}).\n"
+                f"Current status: pending. We'll email you when the status changes.\n\n"
+                f"Summary:\n"
+                f"- Type: {data.get('essay_type','')}\n"
+                f"- Subject: {data.get('subject','')}\n"
+                f"- Pages: {data.get('pages','')}\n"
+                f"- Deadline: {data.get('deadline','')}\n\n"
+                f"Thank you,\nEnglish Essay Writing Team"
+            ),
+            reply_to=ADMIN_EMAIL or FROM_EMAIL
+        )
+
+        if not student_ok:
+            app.logger.warning("Student confirmation email failed for %s: %s", student_email, student_err)
         
         return jsonify({'success': True, 'submission_id': submission_id})
         
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        app.logger.exception("Error handling submission")
+        return jsonify({'error': 'Something went wrong. Please try again later.'}), 500
 
 @app.route('/submit-review', methods=['POST'])
 def submit_review():
