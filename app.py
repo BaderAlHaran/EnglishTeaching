@@ -478,8 +478,13 @@ def index_html():
 @app.route('/favicon.ico')
 def favicon():
     """Handle favicon requests; serve if present, else no content"""
-    favicon_path = os.path.join('.', 'favicon.ico')
-    if os.path.exists(favicon_path):
+    static_favicon = os.path.join(app.root_path, 'static', 'favicon.ico')
+    if os.path.exists(static_favicon):
+        return send_from_directory('static', 'favicon.ico')
+
+    # Backward compatibility: serve legacy root favicon if present
+    legacy_favicon = os.path.join(app.root_path, 'favicon.ico')
+    if os.path.exists(legacy_favicon):
         return send_from_directory('.', 'favicon.ico')
     return ('', 204)
 
