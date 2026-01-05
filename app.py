@@ -142,6 +142,11 @@ class _CursorWrapper:
 def _get_cursor(conn):
     return _CursorWrapper(conn.cursor(), _is_postgres())
 
+def _open_db():
+    """Return a connection and wrapped cursor for the configured database."""
+    conn = _get_connection()
+    return conn, _get_cursor(conn)
+
 def init_database():
     """Initialize database with tables"""
     conn = _get_connection()
@@ -514,8 +519,7 @@ def login():
             flash('Username and password required', 'error')
             return render_template('login.html')
         
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         
         cursor.execute('SELECT * FROM admin_users WHERE username = ? AND is_active = 1', (username,))
         user = cursor.fetchone()
@@ -558,8 +562,7 @@ def logout():
 @app.route('/admin')
 def admin():
     # Check if password is set first
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
     pw_row = cursor.fetchone()
     password_set = bool(pw_row and pw_row[0])
@@ -573,17 +576,16 @@ def admin():
     if not session.get('admin_logged_in'):
         return redirect(url_for('login'))
     # Get statistics
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     
     # Get submission stats
     cursor.execute('SELECT COUNT(*) FROM essay_submissions')
     total_submissions = cursor.fetchone()[0]
     
-    cursor.execute('SELECT COUNT(*) FROM essay_submissions WHERE status = "pending"')
+    cursor.execute("SELECT COUNT(*) FROM essay_submissions WHERE status = 'pending'")
     pending_submissions = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM essay_submissions WHERE status = "completed"')
+
+    cursor.execute("SELECT COUNT(*) FROM essay_submissions WHERE status = 'completed'")
     completed_submissions = cursor.fetchone()[0]
     
     # Get all submissions
@@ -620,8 +622,7 @@ def admin():
 def admin_setup():
     """Admin password setup page"""
     # Check if password is already set
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
     pw_row = cursor.fetchone()
     password_set = bool(pw_row and pw_row[0])
@@ -653,8 +654,7 @@ def admin_setup_post():
     # Hash and save password
     password_hash = hash_password(password)
     
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     cursor.execute('''
         UPDATE admin_users 
         SET password_hash = ? 
@@ -726,8 +726,7 @@ def submit_essay():
                 file_size = os.path.getsize(file_path)
         
         # Save to database
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         
         cursor.execute('''
             INSERT INTO essay_submissions 
@@ -819,8 +818,7 @@ def submit_review():
                 return jsonify({'error': f'{field} is required'}), 400
         
         # Save to database
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         
         cursor.execute('''
             INSERT INTO reviews (name, university, rating, review_text, is_approved)
@@ -838,8 +836,7 @@ def submit_review():
 @app.route('/get-reviews')
 def get_reviews():
     """Get approved reviews"""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     
     cursor.execute('''
         SELECT name, university, rating, review_text, created_at 
@@ -867,8 +864,7 @@ def get_reviews():
 @require_login
 def edit_submission(submission_id):
     """Edit submission details"""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     
     if request.method == 'POST':
         # Update submission
@@ -926,8 +922,7 @@ def edit_submission(submission_id):
 @require_login
 def download_file(submission_id):
     """Download uploaded file"""
-    conn = sqlite3.connect(DATABASE)
-    cursor = conn.cursor()
+    conn, cursor = _open_db()
     
     cursor.execute('SELECT file_path, file_name FROM essay_submissions WHERE id = ?', (submission_id,))
     result = cursor.fetchone()
@@ -959,8 +954,7 @@ def update_status():
         assigned_to = data.get('assigned_to', '')
         admin_notes = data.get('admin_notes', '')
         
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         
         cursor.execute('''
             UPDATE essay_submissions 
@@ -1006,8 +1000,7 @@ def delete_submission():
         if not submission_id:
             return jsonify({'error': 'submission_id is required'}), 400
 
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
 
         # Fetch status and file path
         cursor.execute('SELECT status, file_path FROM essay_submissions WHERE id = ?', (submission_id,))
@@ -1046,8 +1039,7 @@ def bulk_update_status():
         from_status = data.get('from_status')
         to_status = data.get('to_status')
         
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         
         # Update all submissions with the specified status
         cursor.execute('''
@@ -1074,8 +1066,7 @@ def delete_review():
         if not review_id:
             return jsonify({'error': 'review_id is required'}), 400
 
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         cursor.execute('DELETE FROM reviews WHERE id = ?', (review_id,))
         deleted = cursor.rowcount
         conn.commit()
@@ -1097,8 +1088,7 @@ def approve_review():
         if not review_id:
             return jsonify({'error': 'review_id is required'}), 400
 
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         cursor.execute('UPDATE reviews SET is_approved = 1 WHERE id = ?', (review_id,))
         updated = cursor.rowcount
         conn.commit()
@@ -1119,8 +1109,7 @@ def admin_set_password():
             return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
         hpw = hash_password(new_password)
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
+        conn, cursor = _open_db()
         cursor.execute('UPDATE admin_users SET password_hash = ? WHERE username = ?', (hpw, 'mikoandnenoarecool'))
         conn.commit()
         conn.close()
