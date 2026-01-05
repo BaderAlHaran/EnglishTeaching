@@ -1867,6 +1867,12 @@ button {
   }
 }
 
+
+.contact.section {
+  padding-top: var(--space-20);
+  padding-bottom: var(--space-24);
+}
+
 /* ===== ACCESSIBILITY ===== */
 @media (prefers-reduced-motion: reduce) {
   * {
