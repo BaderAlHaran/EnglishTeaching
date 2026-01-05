@@ -154,7 +154,7 @@ def login():
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT * FROM admin_users WHERE username = ? AND is_active = 1', (username,))
+        cursor.execute('SELECT * FROM admin_users WHERE username = ? AND is_active = ?', (username, True))
         user = cursor.fetchone()
         
         if not user or not verify_password(password, user[2]):
@@ -304,9 +304,9 @@ def get_reviews():
     cursor.execute('''
         SELECT name, university, rating, review_text, created_at 
         FROM reviews 
-        WHERE is_approved = 1 
+        WHERE is_approved = ? 
         ORDER BY created_at DESC
-    ''')
+    ''', (True,))
     
     reviews = []
     for row in cursor.fetchall():

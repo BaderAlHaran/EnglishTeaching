@@ -38,8 +38,8 @@ def setup_admin_user():
         # Update or insert admin user
         cursor.execute('''
             INSERT OR REPLACE INTO admin_users (id, username, password_hash, email, created_at, is_active)
-            VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP, 1)
-        ''', (username, password_hash, email))
+            VALUES (1, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ''', (username, password_hash, email, True))
         
         conn.commit()
         conn.close()

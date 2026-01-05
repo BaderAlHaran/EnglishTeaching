@@ -130,10 +130,11 @@ class _CursorWrapper:
         self._is_pg = is_pg
 
     def execute(self, query: str, params=None):
-        if self._is_pg:
-            # translate SQLite-style placeholders '?' to Postgres '%s'
-            # but avoid replacing '??' etc – keep it simple for our queries
+        # translate placeholders depending on backend
+        if self._is_pg and '?' in query and '%s' not in query:
             query = query.replace('?', '%s')
+        elif not self._is_pg and '%s' in query and '?' not in query:
+            query = query.replace('%s', '?')
         if params is None:
             return self._cursor.execute(query)
         return self._cursor.execute(query, params)
@@ -523,7 +524,7 @@ def login():
         
         conn, cursor = _open_db()
         
-        cursor.execute('SELECT * FROM admin_users WHERE username = ? AND is_active = 1', (username,))
+        cursor.execute('SELECT * FROM admin_users WHERE username = %s AND is_active = %s', (username, True))
         user = cursor.fetchone()
         
         # First-time setup: if user exists with no password yet, set it now
@@ -810,6 +811,7 @@ def submit_essay():
 @app.route('/submit-review', methods=['POST'])
 def submit_review():
     """Handle review submission"""
+    conn = None
     try:
         data = request.get_json(silent=True) or request.form or {}
         
@@ -824,17 +826,27 @@ def submit_review():
         
         cursor.execute('''
             INSERT INTO reviews (name, university, rating, review_text, is_approved)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (data['name'], data['university'], data['rating'], data['review_text'], 0))
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (data['name'], data['university'], data['rating'], data['review_text'], False))
         
         conn.commit()
-        conn.close()
         
         return jsonify({'success': True})
         
     except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         app.logger.exception("submit-review failed")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/get-reviews')
 def get_reviews():
@@ -844,9 +856,9 @@ def get_reviews():
     cursor.execute('''
         SELECT name, university, rating, review_text, created_at 
         FROM reviews 
-        WHERE is_approved = 1 
+        WHERE is_approved = %s 
         ORDER BY created_at DESC
-    ''')
+    ''', (True,))
     
     reviews = []
     for row in cursor.fetchall():
@@ -1085,6 +1097,7 @@ def delete_review():
 @require_login
 def approve_review():
     """Approve a review by id (makes it visible publicly)."""
+    conn = None
     try:
         data = request.get_json()
         review_id = data.get('review_id')
@@ -1092,16 +1105,26 @@ def approve_review():
             return jsonify({'error': 'review_id is required'}), 400
 
         conn, cursor = _open_db()
-        cursor.execute('UPDATE reviews SET is_approved = 1 WHERE id = ?', (review_id,))
+        cursor.execute('UPDATE reviews SET is_approved = %s WHERE id = %s', (True, review_id))
         updated = cursor.rowcount
         conn.commit()
-        conn.close()
 
         if updated == 0:
             return jsonify({'error': 'Review not found'}), 404
         return jsonify({'success': True})
     except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 @app.route('/admin/set-password', methods=['POST'])
 @require_login
 def admin_set_password():
