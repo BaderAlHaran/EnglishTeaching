@@ -811,7 +811,7 @@ def submit_essay():
 def submit_review():
     """Handle review submission"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or request.form or {}
         
         # Validate required fields
         required_fields = ['name', 'university', 'rating', 'review_text']
@@ -833,6 +833,7 @@ def submit_review():
         return jsonify({'success': True})
         
     except Exception as e:
+        app.logger.exception("submit-review failed")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/get-reviews')
