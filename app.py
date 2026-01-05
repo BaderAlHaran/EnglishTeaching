@@ -118,8 +118,8 @@ def _is_postgres() -> bool:
 
 def _get_connection():
     if _is_postgres():
-        import psycopg2
-        return psycopg2.connect(DATABASE_URL)
+        import psycopg
+        return psycopg.connect(DATABASE_URL)
     return sqlite3.connect(DATABASE)
 
 class _CursorWrapper:
