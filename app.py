@@ -411,7 +411,7 @@ def static_files(filename):
     if not filename.startswith('api/') and not filename.startswith('templates/'):
         try:
             # Check if it's a static file
-            if filename.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.xml', '.txt', '.json')):
+            if filename.endswith(('.html', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.xml', '.txt', '.json')):
                 return send_from_directory('.', filename)
             else:
                 return jsonify({'error': 'Not found'}), 404
