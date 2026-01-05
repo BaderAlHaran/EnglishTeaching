@@ -119,7 +119,9 @@ def _is_postgres() -> bool:
 def _get_connection():
     if _is_postgres():
         import psycopg
-        return psycopg.connect(DATABASE_URL)
+        conn = psycopg.connect(DATABASE_URL)
+        conn.autocommit = True  # avoid aborted transaction states during schema setup
+        return conn
     return sqlite3.connect(DATABASE)
 
 class _CursorWrapper:
