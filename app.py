@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash, ses
 from flask_cors import CORS
 import sqlite3
 import hashlib
+import hmac
 import bcrypt
 import secrets
 import os
@@ -99,10 +100,13 @@ DATABASE = os.environ.get('DATABASE_PATH', 'essay_service.db')
 DATABASE_URL = os.environ.get('DATABASE_URL')  # e.g. postgres://user:pass@host/db
 
 # Admin credentials (configure via environment variables)
-# Defaults are safe/non-verbose and do not log to console
+# NOTE: Changing ADMIN_PASSWORD requires an app restart to take effect.
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'mikoandnenoarecool')
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', secrets.token_urlsafe(32))
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+if not ADMIN_PASSWORD:
+    raise RuntimeError("ADMIN_PASSWORD is not set")
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@essaywriting.com')
+ADMIN_RESET_TOKEN = os.environ.get('ADMIN_RESET_TOKEN')
 FROM_EMAIL = os.environ.get('FROM_EMAIL', ADMIN_EMAIL)
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 CONTACT_RECIPIENT = os.environ.get('CONTACT_RECIPIENT', ADMIN_EMAIL)
@@ -294,20 +298,27 @@ def init_database():
     # Enforce single admin username
     cursor.execute('DELETE FROM admin_users WHERE username != ?', (ADMIN_USERNAME,))
 
-    # Create default admin user if missing; if ADMIN_PASSWORD not provided, leave hash NULL and require setup
-    admin_pw = os.environ.get('ADMIN_PASSWORD')
-    pw_hash = hash_password(admin_pw) if admin_pw else None
+    # Keep admin password in sync with ADMIN_PASSWORD env (restart required after changes).
+    pw_hash = hash_password(ADMIN_PASSWORD)
     if _is_postgres():
         cursor.execute('''
-            INSERT INTO admin_users (username, password_hash, email)
-            VALUES (?, ?, ?)
-            ON CONFLICT (username) DO NOTHING
-        ''', (ADMIN_USERNAME, pw_hash, ADMIN_EMAIL))
+            INSERT INTO admin_users (username, password_hash, email, is_active)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (username) DO UPDATE
+            SET password_hash = EXCLUDED.password_hash,
+                email = EXCLUDED.email,
+                is_active = EXCLUDED.is_active
+        ''', (ADMIN_USERNAME, pw_hash, ADMIN_EMAIL, True))
     else:
         cursor.execute('''
-            INSERT OR IGNORE INTO admin_users (username, password_hash, email)
-            VALUES (?, ?, ?)
-        ''', (ADMIN_USERNAME, pw_hash, ADMIN_EMAIL))
+            INSERT OR IGNORE INTO admin_users (username, password_hash, email, is_active)
+            VALUES (?, ?, ?, ?)
+        ''', (ADMIN_USERNAME, pw_hash, ADMIN_EMAIL, 1))
+        cursor.execute('''
+            UPDATE admin_users
+            SET password_hash = ?, email = ?, is_active = 1
+            WHERE username = ?
+        ''', (pw_hash, ADMIN_EMAIL, ADMIN_USERNAME))
     
     conn.commit()
     conn.close()
@@ -524,18 +535,32 @@ def login():
         
         conn, cursor = _open_db()
         
-        cursor.execute('SELECT * FROM admin_users WHERE username = %s AND is_active = %s', (username, True))
+        cursor.execute('SELECT * FROM admin_users WHERE username = ? AND is_active = ?', (username, True))
         user = cursor.fetchone()
-        
-        # First-time setup: if user exists with no password yet, set it now
-        if user and (not user[2] or user[2] == ''):
-            new_hash = hash_password(password)
-            cursor.execute('UPDATE admin_users SET password_hash = ? WHERE id = ?', (new_hash, user[0]))
-            conn.commit()
-        elif not user or not verify_password(password, user[2]):
+        env_match = hmac.compare_digest(password, ADMIN_PASSWORD)
+
+        if not user:
             conn.close()
             flash('Invalid credentials', 'error')
             return render_template('login.html')
+
+        # First-time setup: require ADMIN_PASSWORD and set it now
+        if not user[2] or user[2] == '':
+            if not env_match:
+                conn.close()
+                flash('Invalid credentials', 'error')
+                return render_template('login.html')
+            new_hash = hash_password(ADMIN_PASSWORD)
+            cursor.execute('UPDATE admin_users SET password_hash = ? WHERE id = ?', (new_hash, user[0]))
+        else:
+            password_ok = verify_password(password, user[2])
+            if not password_ok and not env_match:
+                conn.close()
+                flash('Invalid credentials', 'error')
+                return render_template('login.html')
+            if env_match and not password_ok:
+                new_hash = hash_password(ADMIN_PASSWORD)
+                cursor.execute('UPDATE admin_users SET password_hash = ? WHERE id = ?', (new_hash, user[0]))
         
         # Update last login
         # If a legacy SHA-256 hash matched, upgrade to bcrypt (only if hash exists)
@@ -649,7 +674,11 @@ def admin_setup_post():
     if password != confirm_password:
         flash('Passwords do not match', 'error')
         return redirect(url_for('admin_setup'))
-    
+
+    if password != ADMIN_PASSWORD:
+        flash('Password must match ADMIN_PASSWORD. Update env vars and restart the app.', 'error')
+        return redirect(url_for('admin_setup'))
+
     if len(password) < 8:
         flash('Password must be at least 8 characters long', 'error')
         return redirect(url_for('admin_setup'))
@@ -668,6 +697,32 @@ def admin_setup_post():
     
     flash('Password set successfully! You can now log in.', 'success')
     return redirect(url_for('login'))
+
+@app.route('/admin-reset', methods=['POST'])
+def admin_reset():
+    """Reset admin password using a one-time token (only if ADMIN_RESET_TOKEN is set)."""
+    if not ADMIN_RESET_TOKEN:
+        return jsonify({'error': 'Not found'}), 404
+
+    payload = request.get_json(silent=True) or {}
+    token = (
+        request.headers.get('X-Admin-Reset-Token')
+        or payload.get('token')
+        or request.form.get('token')
+    )
+    if not token or token != ADMIN_RESET_TOKEN:
+        return jsonify({'error': 'Invalid token'}), 403
+
+    password_hash = hash_password(ADMIN_PASSWORD)
+    conn, cursor = _open_db()
+    cursor.execute('UPDATE admin_users SET password_hash = ? WHERE username = ?', (password_hash, ADMIN_USERNAME))
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': 'DB synced to ADMIN_PASSWORD; restart required only if ADMIN_PASSWORD changed.'
+    })
 
 @app.route('/submit', methods=['POST'])
 @app.route('/submit-essay', methods=['POST'])
@@ -1131,12 +1186,14 @@ def admin_set_password():
     try:
         data = request.get_json()
         new_password = (data.get('password') or '').strip()
+        if new_password != ADMIN_PASSWORD:
+            return jsonify({'error': 'Password must match ADMIN_PASSWORD. Update env vars and restart the app.'}), 400
         if len(new_password) < 8:
             return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
         hpw = hash_password(new_password)
         conn, cursor = _open_db()
-        cursor.execute('UPDATE admin_users SET password_hash = ? WHERE username = ?', (hpw, 'mikoandnenoarecool'))
+        cursor.execute('UPDATE admin_users SET password_hash = ? WHERE username = ?', (hpw, ADMIN_USERNAME))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
