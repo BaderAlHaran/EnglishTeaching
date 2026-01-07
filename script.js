@@ -187,7 +187,17 @@ class HeaderScrollEffect {
   }
 
   init() {
-    window.addEventListener('scroll', () => this.handleScroll());
+    this.ticking = false;
+    window.addEventListener('scroll', () => this.requestTick(), { passive: true });
+  }
+
+  requestTick() {
+    if (this.ticking) return;
+    this.ticking = true;
+    window.requestAnimationFrame(() => {
+      this.handleScroll();
+      this.ticking = false;
+    });
   }
 
   handleScroll() {
@@ -262,8 +272,18 @@ class ParallaxEffect {
 
   init() {
     if (this.heroBackground || this.ctaBackground) {
-      window.addEventListener('scroll', () => this.handleScroll());
+      this.ticking = false;
+      window.addEventListener('scroll', () => this.requestTick(), { passive: true });
     }
+  }
+
+  requestTick() {
+    if (this.ticking) return;
+    this.ticking = true;
+    window.requestAnimationFrame(() => {
+      this.handleScroll();
+      this.ticking = false;
+    });
   }
 
   handleScroll() {
@@ -289,7 +309,7 @@ class ReviewSystem {
 
   init() {
     this.setupForm();
-    this.loadReviews();
+    window.addEventListener('load', () => this.loadReviews(), { once: true });
   }
 
   async loadReviews() {
@@ -504,7 +524,7 @@ class PerformanceOptimizer {
       }, 10);
     };
     
-    window.addEventListener('scroll', debouncedScroll);
+    window.addEventListener('scroll', debouncedScroll, { passive: true });
   }
 }
 

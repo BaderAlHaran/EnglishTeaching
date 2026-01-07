@@ -9,13 +9,16 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
     
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
     
-    <link rel="stylesheet" href="styles.css">
+    <link rel="preload" as="style" href="styles.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="styles.css"></noscript>
     <link rel="apple-touch-icon" href="/favicon.svg">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="alternate icon" href="/favicon.ico">
@@ -24,7 +27,7 @@
 
 
     <link rel="canonical" href="https://englishessaywriting.net/">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" imagesrcset="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80&fm=webp 1000w, https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp 2070w" imagesizes="(max-width: 768px) 100vw, 50vw">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70&fm=webp" imagesrcset="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=70&fm=webp 800w, https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70&fm=webp 1200w" imagesizes="(max-width: 768px) 100vw, 50vw">
 
     <!-- Open Graph -->
     <meta property="og:title" content="Free Academic Essay Writing Services">
@@ -180,11 +183,11 @@
             </div>
             <div class="hero__visual">
                 <div class="hero__background">
-                    <img loading="eager" fetchpriority="high" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" 
-                         alt="Academic books and study materials on a desk" class="hero__bg-image" width="2070" height="1100">
+                    <img loading="eager" fetchpriority="high" decoding="async" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70&fm=webp" 
+                         alt="Academic books and study materials on a desk" class="hero__bg-image" width="1200" height="638">
                 </div>
                 <div class="hero__foreground">
-                    <img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80&fm=webp" 
+                    <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=70&fm=webp" 
                          alt="Open books and notebooks arranged neatly" class="hero__fg-image" width="1000" height="700">
                 </div>
             </div>
@@ -406,8 +409,8 @@
     <!-- CTA Section -->
     <section id="about" class="cta">
         <div class="cta__background">
-            <img loading="lazy" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80&fm=webp" 
-                 alt="Desk with papers" class="cta__bg-image" width="2070" height="1100">
+            <img loading="lazy" decoding="async" src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=70&fm=webp" 
+                 alt="Desk with papers" class="cta__bg-image" width="1200" height="638">
         </div>
         <div class="container">
             <div class="cta__content">
@@ -467,6 +470,6 @@
         </div>
     </footer>
 
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
