@@ -116,6 +116,8 @@ FROM_EMAIL = os.environ.get('FROM_EMAIL', ADMIN_EMAIL)
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
 CONTACT_RECIPIENT = os.environ.get('CONTACT_RECIPIENT', ADMIN_EMAIL)
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+GEOIP_ENABLED = os.environ.get('GEOIP_ENABLED', '').lower() in {'1', 'true', 'yes', 'on'}
+GEOIP_DB_PATH = os.environ.get('GEOIP_DB_PATH', 'data/GeoLite2-Country.mmdb')
 
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
@@ -301,6 +303,7 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 referrer TEXT,
                 user_agent TEXT,
+                country_code TEXT,
                 UNIQUE (visitor_id, visit_date)
             )
         ''')
@@ -314,6 +317,7 @@ def init_database():
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 referrer TEXT,
                 user_agent TEXT,
+                country_code TEXT,
                 UNIQUE (visitor_id, visit_date)
             )
         ''')
@@ -343,6 +347,15 @@ def init_database():
         cursor.execute("ALTER TABLE essay_submissions ADD COLUMN priority TEXT DEFAULT 'normal'")
     except Exception:
         pass  # Column already exists
+
+    # Add country code column to visits if missing
+    try:
+        if _is_postgres():
+            cursor.execute('ALTER TABLE visits ADD COLUMN IF NOT EXISTS country_code TEXT')
+        else:
+            cursor.execute('ALTER TABLE visits ADD COLUMN country_code TEXT')
+    except Exception:
+        pass  # Column already exists or visits table missing
     
     # Enforce single admin username
     cursor.execute('DELETE FROM admin_users WHERE username != ?', (ADMIN_USERNAME,))
@@ -547,19 +560,20 @@ def track_visit():
     user_agent = (request.headers.get('User-Agent') or '')[:255]
     referrer_value = referrer[:512] if referrer else None
     path_value = path[:512]
+    country_code = _get_country_code_from_request()
 
     conn, cursor = _open_db()
     if _is_postgres():
         cursor.execute('''
-            INSERT INTO visits (visitor_id, visit_date, first_path, referrer, user_agent)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (visitor_id, visit_date) DO NOTHING
-        ''', (visitor_id, today, path_value, referrer_value, user_agent or None))
+        ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
     else:
         cursor.execute('''
-            INSERT OR IGNORE INTO visits (visitor_id, visit_date, first_path, referrer, user_agent)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (visitor_id, today, path_value, referrer_value, user_agent or None))
+            INSERT OR IGNORE INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
     conn.commit()
     conn.close()
 
@@ -623,6 +637,33 @@ def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
     except Exception as e:
         app.logger.error("Resend email failed: %s", e)
         return False, 'Unable to send email right now. Please try again later.'
+
+def _get_country_code_from_request():
+    if not GEOIP_ENABLED:
+        return None
+    if not GEOIP_DB_PATH or not os.path.exists(GEOIP_DB_PATH):
+        return None
+    try:
+        from geoip2.database import Reader
+    except Exception:
+        return None
+
+    ip = None
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        ip = xff.split(',')[0].strip()
+    if not ip:
+        ip = request.remote_addr
+    if not ip:
+        return None
+
+    try:
+        with Reader(GEOIP_DB_PATH) as reader:
+            response = reader.country(ip)
+            code = (response.country.iso_code or '').strip().upper()
+            return code or None
+    except Exception:
+        return None
 
 @app.route('/contact/send', methods=['POST'])
 def send_contact():
@@ -839,6 +880,16 @@ def admin_analytics():
         LIMIT 10
     ''', (today.isoformat(),))
     top_rows = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT country_code, COUNT(*)
+        FROM visits
+        WHERE visit_date = ? AND country_code IS NOT NULL AND country_code != ''
+        GROUP BY country_code
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    ''', (today.isoformat(),))
+    country_rows = cursor.fetchall()
     conn.close()
 
     last_7_days = []
@@ -848,13 +899,15 @@ def admin_analytics():
         last_7_days.append({'date': day_key, 'count': counts_by_date.get(day_key, 0)})
 
     top_pages = [{'path': row[0], 'count': row[1]} for row in top_rows]
+    top_countries = [{'country': row[0], 'count': row[1]} for row in country_rows]
 
     return render_template(
         'admin_analytics.html',
         today_count=counts_by_date.get(today.isoformat(), 0),
         yesterday_count=counts_by_date.get(yesterday.isoformat(), 0),
         last_7_days=last_7_days,
-        top_pages=top_pages
+        top_pages=top_pages,
+        top_countries=top_countries
     )
 
 @app.route('/admin-setup')

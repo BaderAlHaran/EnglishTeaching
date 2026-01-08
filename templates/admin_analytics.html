@@ -167,6 +167,30 @@
             <div class="empty">No visits recorded today.</div>
             {% endif %}
         </div>
+
+        <div class="section">
+            <h2>Top Countries Today</h2>
+            {% if top_countries %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Unique Visitors</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in top_countries %}
+                    <tr>
+                        <td>{{ row.country }}</td>
+                        <td>{{ row.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty">No country data recorded today.</div>
+            {% endif %}
+        </div>
     </div>
 </body>
 </html>
