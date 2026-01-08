@@ -14,6 +14,7 @@ import re
 import logging
 import resend
 from urllib.parse import urlparse
+import threading
 
 import time
 from collections import deque
@@ -61,6 +62,9 @@ def force_https():
     if not app.debug and request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), code=301)
 
+@app.before_request
+def daily_cleanup_guard():
+    _ensure_daily_cleanup()
 
 
 # Set baseline security headers on all responses
@@ -270,6 +274,22 @@ def init_database():
             )
         ''')
 
+    # App metadata table for housekeeping (daily cleanup)
+    if _is_postgres():
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS app_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS app_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        ''')
+
     # Visits table for lightweight analytics
     if _is_postgres():
         cursor.execute('''
@@ -389,6 +409,60 @@ def require_login(f):
 
 # Initialize database
 init_database()
+
+_cleanup_lock = threading.Lock()
+_last_cleanup_checked = None
+
+def _run_cleanup_if_needed():
+    if not _cleanup_lock.acquire(False):
+        return
+    conn = None
+    try:
+        today = datetime.now().date().isoformat()
+        conn, cursor = _open_db()
+        cursor.execute('SELECT value FROM app_meta WHERE key = ?', ('last_cleanup_date',))
+        row = cursor.fetchone()
+        last_cleanup = row[0] if row else None
+        if last_cleanup == today:
+            return
+
+        cutoff_date = (datetime.now().date() - timedelta(days=180)).isoformat()
+        cursor.execute('DELETE FROM visits WHERE visit_date < ?', (cutoff_date,))
+
+        if _is_postgres():
+            cursor.execute('''
+                INSERT INTO app_meta (key, value)
+                VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            ''', ('last_cleanup_date', today))
+        else:
+            cursor.execute('''
+                INSERT OR REPLACE INTO app_meta (key, value)
+                VALUES (?, ?)
+            ''', ('last_cleanup_date', today))
+        conn.commit()
+    except Exception:
+        app.logger.exception("Daily analytics cleanup failed")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        _cleanup_lock.release()
+
+def _ensure_daily_cleanup():
+    global _last_cleanup_checked
+    today = datetime.now().date().isoformat()
+    if _last_cleanup_checked == today:
+        return
+    _last_cleanup_checked = today
+    threading.Thread(target=_run_cleanup_if_needed, daemon=True).start()
 
 # Routes - Define specific routes BEFORE catch-all route
 @app.route('/')
