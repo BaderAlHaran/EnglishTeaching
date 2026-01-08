@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory, make_response
 from flask_cors import CORS
 import sqlite3
 import hashlib
@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 import re
 import logging
 import resend
+from urllib.parse import urlparse
 
 import time
 from collections import deque
@@ -268,6 +269,34 @@ def init_database():
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+    # Visits table for lightweight analytics
+    if _is_postgres():
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS visits (
+                id SERIAL PRIMARY KEY,
+                visitor_id TEXT NOT NULL,
+                visit_date DATE NOT NULL,
+                first_path TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                referrer TEXT,
+                user_agent TEXT,
+                UNIQUE (visitor_id, visit_date)
+            )
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS visits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visitor_id TEXT NOT NULL,
+                visit_date DATE NOT NULL,
+                first_path TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                referrer TEXT,
+                user_agent TEXT,
+                UNIQUE (visitor_id, visit_date)
+            )
+        ''')
     
     # Add new columns to existing table if they don't exist
     try:
@@ -414,6 +443,56 @@ def sitemap_xml():
         "</urlset>\n"
     )
     return (xml, 200, {'Content-Type': 'application/xml; charset=utf-8'})
+
+@app.route('/track', methods=['POST'])
+def track_visit():
+    data = request.get_json(silent=True) or request.form or {}
+    visitor_id = request.cookies.get('visitor_id')
+    new_visitor_id = None
+    if not visitor_id:
+        new_visitor_id = str(uuid.uuid4())
+        visitor_id = new_visitor_id
+
+    today = datetime.now().date().isoformat()
+    path = (data.get('path') or '').strip()
+    referrer = (request.referrer or '').strip()
+    if not path and referrer:
+        try:
+            path = urlparse(referrer).path or referrer
+        except Exception:
+            path = referrer
+    if not path:
+        path = '/'
+
+    if path.startswith('/admin'):
+        resp = make_response('', 204)
+        if new_visitor_id:
+            resp.set_cookie('visitor_id', new_visitor_id, max_age=31536000, samesite='Lax', httponly=True, secure=not app.debug)
+        return resp
+
+    user_agent = (request.headers.get('User-Agent') or '')[:255]
+    referrer_value = referrer[:512] if referrer else None
+    path_value = path[:512]
+
+    conn, cursor = _open_db()
+    if _is_postgres():
+        cursor.execute('''
+            INSERT INTO visits (visitor_id, visit_date, first_path, referrer, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (visitor_id, visit_date) DO NOTHING
+        ''', (visitor_id, today, path_value, referrer_value, user_agent or None))
+    else:
+        cursor.execute('''
+            INSERT OR IGNORE INTO visits (visitor_id, visit_date, first_path, referrer, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (visitor_id, today, path_value, referrer_value, user_agent or None))
+    conn.commit()
+    conn.close()
+
+    resp = make_response('', 204)
+    if new_visitor_id:
+        resp.set_cookie('visitor_id', new_visitor_id, max_age=31536000, samesite='Lax', httponly=True, secure=not app.debug)
+    return resp
 
 # Static file routes - Must be AFTER specific routes
 @app.route('/<path:filename>')
@@ -645,6 +724,64 @@ def admin():
     }
     
     return render_template('admin.html', stats=stats, submissions=all_submissions, password_set=password_set, reviews=all_reviews)
+
+@app.route('/admin/analytics')
+def admin_analytics():
+    conn, cursor = _open_db()
+    cursor.execute('SELECT password_hash FROM admin_users WHERE username = ?', (ADMIN_USERNAME,))
+    pw_row = cursor.fetchone()
+    password_set = bool(pw_row and pw_row[0])
+    conn.close()
+
+    if not password_set:
+        return redirect(url_for('admin_setup'))
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('login'))
+
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+    start_date = today - timedelta(days=6)
+
+    conn, cursor = _open_db()
+    cursor.execute('''
+        SELECT visit_date, COUNT(*)
+        FROM visits
+        WHERE visit_date >= ?
+        GROUP BY visit_date
+    ''', (start_date.isoformat(),))
+    rows = cursor.fetchall()
+    counts_by_date = {}
+    for row in rows:
+        date_value = row[0]
+        date_key = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
+        counts_by_date[date_key] = row[1]
+
+    cursor.execute('''
+        SELECT first_path, COUNT(*)
+        FROM visits
+        WHERE visit_date = ? AND first_path IS NOT NULL AND first_path != ''
+        GROUP BY first_path
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+    ''', (today.isoformat(),))
+    top_rows = cursor.fetchall()
+    conn.close()
+
+    last_7_days = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        day_key = day.isoformat()
+        last_7_days.append({'date': day_key, 'count': counts_by_date.get(day_key, 0)})
+
+    top_pages = [{'path': row[0], 'count': row[1]} for row in top_rows]
+
+    return render_template(
+        'admin_analytics.html',
+        today_count=counts_by_date.get(today.isoformat(), 0),
+        yesterday_count=counts_by_date.get(yesterday.isoformat(), 0),
+        last_7_days=last_7_days,
+        top_pages=top_pages
+    )
 
 @app.route('/admin-setup')
 def admin_setup():

@@ -612,6 +612,31 @@ document.addEventListener('DOMContentLoaded', () => {
   new FormValidation();
   new PerformanceOptimizer();
   
+  // Lightweight internal analytics (skip admin/auth pages and obvious bots)
+  const path = window.location.pathname || '/';
+  const ua = (navigator.userAgent || '').toLowerCase();
+  const botHints = ['bot', 'crawl', 'spider', 'slurp', 'headless', 'facebookexternalhit', 'whatsapp', 'discordbot', 'telegrambot'];
+  const isBot = Boolean(navigator.webdriver) || botHints.some(hint => ua.includes(hint));
+  const isAdminPath = path.startsWith('/admin') || path.startsWith('/login') || path.startsWith('/admin-setup');
+
+  if (!isBot && !isAdminPath) {
+    const payload = JSON.stringify({ path });
+    window.addEventListener('load', () => {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        const ok = navigator.sendBeacon('/track', blob);
+        if (ok) return;
+      }
+      fetch('/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+        credentials: 'same-origin'
+      }).catch(() => {});
+    }, { once: true });
+  }
+
   // Add loading complete class
   document.body.classList.add('loaded');
   
