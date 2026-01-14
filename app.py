@@ -1549,7 +1549,6 @@ def _extract_text_from_upload(file_storage):
         return None, "No text could be extracted from the DOCX."
     return text, None
 
-def _analyze_text_placeholder(text):
 def _run_local_analysis(text):
     try:
         from spellchecker import SpellChecker
