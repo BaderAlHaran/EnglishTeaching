@@ -1616,10 +1616,10 @@ def _ensure_improve_jobs_table():
                     ('warning', 'TEXT')
                 ):
                     if col not in cols:
-                    try:
-                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
-                    except Exception:
-                        pass
+                        try:
+                            cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                        except Exception:
+                            pass
         else:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS improve_jobs (
@@ -1662,10 +1662,10 @@ def _ensure_improve_jobs_table():
                     ('warning', 'TEXT')
                 ):
                     if col not in cols:
-                    try:
-                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
-                    except Exception:
-                        pass
+                        try:
+                            cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                        except Exception:
+                            pass
         conn.commit()
     finally:
         conn.close()
