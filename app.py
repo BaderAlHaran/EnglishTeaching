@@ -1472,6 +1472,9 @@ IMPROVE_MAX_BYTES = 10 * 1024 * 1024
 IMPROVE_MAX_CHARS = 50000
 IMPROVE_MAX_PAGES = 20
 IMPROVE_JOB_TIMEOUT_SECONDS = 20
+LT_LANGUAGE = os.environ.get('LT_LANGUAGE', 'en-US')
+LT_PORT = int(os.environ.get('LT_PORT', '8010'))
+AI_CHECKER_ENABLED = os.environ.get('AI_CHECKER_ENABLED', 'true').lower() in {'1', 'true', 'yes', 'on'}
 
 def _ensure_submissions_table():
     conn, cursor = _open_db()
@@ -1666,193 +1669,57 @@ def _process_improve_job(job_id, extracted_text, warning):
         _update_improve_job(job_id, status='error', progress=100, error='AI checker temporarily unavailable. Please use Human Review.', message='AI checker temporarily unavailable.')
 
 def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None):
-    try:
-        from spellchecker import SpellChecker
-    except Exception:
-        return None, "Spelling checker is unavailable. Please install pyspellchecker."
-
-    try:
-        from proselint.tools import lint as proselint_lint
-    except Exception:
-        return None, "Style checker is unavailable. Please install proselint."
-
-    try:
-        from wordfreq import zipf_frequency
-    except Exception:
-        zipf_frequency = None
-
-    issues = []
-    spell = SpellChecker()
+    if not AI_CHECKER_ENABLED:
+        return None, "AI checker unavailable. Please use Human Review."
     if start_time is None:
         start_time = time.time()
 
-    def _timed_out():
-        return (time.time() - start_time) > timeout_seconds
+    def _remaining_timeout():
+        elapsed = time.time() - start_time
+        return max(1, int(timeout_seconds - elapsed))
 
-    email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
-    url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
-    ignored_spans = []
-    for match in email_pattern.finditer(text):
-        ignored_spans.append((match.start(), match.end()))
-    for match in url_pattern.finditer(text):
-        ignored_spans.append((match.start(), match.end()))
-
-    def _overlaps_ignored(start, end):
-        for s, e in ignored_spans:
-            if start < e and end > s:
-                return True
-        return False
-
-    word_pattern = re.compile(r"[A-Za-z][A-Za-z'-]*")
-    tokens = list(word_pattern.finditer(text))
-    total_tokens = max(1, len(tokens))
-    for idx, match in enumerate(tokens):
-        if _timed_out():
-            return None, "Analysis timed out. Please try a shorter section."
-        start, end = match.start(), match.end()
-        if _overlaps_ignored(start, end):
-            continue
-        word = match.group(0) or ''
-        clean = word.strip()
-        if not clean:
-            app.logger.info("Skipping token len=%s reason=empty", len(word))
-            continue
-        if len(clean) < 3:
-            app.logger.info("Skipping token len=%s reason=too_short", len(clean))
-            continue
-        if any(ch.isdigit() for ch in clean):
-            app.logger.info("Skipping token len=%s reason=has_digits", len(clean))
-            continue
-        if clean.isupper():
-            app.logger.info("Skipping token len=%s reason=all_caps", len(clean))
-            continue
-        token_core = re.sub(r"['-]", "", clean)
-        if not token_core or not token_core.isalpha():
-            app.logger.info("Skipping token len=%s reason=non_alpha", len(clean))
-            continue
-        lower = str(clean.lower())
-        if lower in spell.unknown([lower]):
-            try:
-                cand = spell.candidates(lower) or []
-                candidates = list(cand)
-            except Exception:
-                app.logger.info("Skipping token len=%s reason=candidates_error", len(clean))
-                continue
-            if candidates:
-                if zipf_frequency:
-                    candidates.sort(key=lambda c: zipf_frequency(c, 'en'), reverse=True)
-                else:
-                    candidates.sort(key=lambda c: spell.word_frequency.frequency(c), reverse=True)
-            suggestions = [c for c in candidates if c != lower][:3]
-            issues.append({
-                'start': start,
-                'end': end,
-                'kind': 'spelling',
-                'message': 'Possible spelling mistake.',
-                'suggestions': suggestions
-            })
-        if progress_cb and idx % 50 == 0:
-            progress_cb(20 + int(50 * idx / total_tokens), "Checking spelling...")
-
-    if _timed_out():
-        return None, "Analysis timed out. Please try a shorter section."
     if progress_cb:
-        progress_cb(70, "Checking style...")
+        progress_cb(20, "Contacting grammar engine...")
+
     try:
-        style_hits = proselint_lint(text) or []
+        import urllib.parse
+        import urllib.request
+        payload = urllib.parse.urlencode({
+            'text': text,
+            'language': LT_LANGUAGE
+        }).encode('utf-8')
+        url = f"http://127.0.0.1:{LT_PORT}/v2/check"
+        req = urllib.request.Request(url, data=payload, method='POST')
+        with urllib.request.urlopen(req, timeout=_remaining_timeout()) as resp:
+            raw = resp.read()
+        data = json.loads(raw.decode('utf-8'))
     except Exception:
-        style_hits = []
-    for hit in style_hits:
-        if not isinstance(hit, dict):
+        return None, "AI checker temporarily unavailable. Please use Human Review."
+
+    matches = data.get('matches', []) if isinstance(data, dict) else []
+    issues = []
+    for match in matches:
+        offset = match.get('offset')
+        length = match.get('length')
+        if offset is None or length is None:
             continue
-        start = hit.get('start')
-        end = hit.get('end')
-        if start is None or end is None:
-            continue
-        message = hit.get('message') or 'Style issue.'
+        replacements = match.get('replacements') or []
+        suggestions = [r.get('value') for r in replacements if r.get('value')][:3]
         issues.append({
-            'start': start,
-            'end': end,
-            'kind': 'style',
-            'message': message,
-            'suggestions': []
-        })
-
-    if _timed_out():
-        return None, "Analysis timed out. Please try a shorter section."
-    if progress_cb:
-        progress_cb(85, "Checking grammar...")
-    for match in re.finditer(r'\b([A-Za-z]+)\s+(\1)\b', text, flags=re.IGNORECASE):
-        issues.append({
-            'start': match.start(),
-            'end': match.end(),
+            'start': offset,
+            'end': offset + length,
             'kind': 'grammar',
-            'message': 'Repeated word.',
-            'suggestions': []
+            'message': match.get('message') or 'Possible grammar issue.',
+            'suggestions': suggestions
         })
-
-    for match in re.finditer(r' {2,}', text):
-        issues.append({
-            'start': match.start(),
-            'end': match.end(),
-            'kind': 'grammar',
-            'message': 'Extra spaces.',
-            'suggestions': []
-        })
-
-    for match in re.finditer(r'[.!?]\s+[a-z]', text):
-        start = match.start() + 2
-        word_match = re.match(r'[a-z][A-Za-z\'-]*', text[start:])
-        end = start + (word_match.end() if word_match else 1)
-        issues.append({
-            'start': start,
-            'end': end,
-            'kind': 'grammar',
-            'message': 'Sentence should start with a capital letter.',
-            'suggestions': []
-        })
-
-    sentence_start = 0
-    for match in re.finditer(r'[.!?]', text):
-        sentence_end = match.end()
-        sentence = text[sentence_start:sentence_end]
-        words = word_pattern.findall(sentence)
-        if len(words) > 30:
-            issues.append({
-                'start': sentence_start,
-                'end': sentence_end,
-                'kind': 'style',
-                'message': 'Sentence is very long; consider splitting it.',
-                'suggestions': []
-            })
-        sentence_start = sentence_end
-    if sentence_start < len(text):
-        sentence = text[sentence_start:]
-        words = word_pattern.findall(sentence)
-        if len(words) > 30:
-            issues.append({
-                'start': sentence_start,
-                'end': len(text),
-                'kind': 'style',
-                'message': 'Sentence is very long; consider splitting it.',
-                'suggestions': []
-            })
 
     if progress_cb:
         progress_cb(95, "Finalizing...")
-    for match in re.finditer(r'!!+', text):
-        issues.append({
-            'start': match.start(),
-            'end': match.end(),
-            'kind': 'grammar',
-            'message': 'Excessive exclamation marks.',
-            'suggestions': []
-        })
 
     summary = {
-        'spelling': sum(1 for i in issues if i['kind'] == 'spelling'),
-        'grammar': sum(1 for i in issues if i['kind'] == 'grammar'),
-        'style': sum(1 for i in issues if i['kind'] == 'style')
+        'spelling': 0,
+        'grammar': len(issues),
+        'style': 0
     }
     return {'issues': issues, 'summary': summary}, None
 
