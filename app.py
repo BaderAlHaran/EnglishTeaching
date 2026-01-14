@@ -1566,28 +1566,28 @@ def _ensure_improve_jobs_table():
         if _is_postgres():
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS improve_jobs (
-                    id TEXT PRIMARY KEY,
+                    job_id TEXT PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status TEXT NOT NULL,
                     progress INTEGER DEFAULT 0,
                     message TEXT,
-                    extracted_text TEXT,
-                    ai_results_json TEXT,
+                    result_html TEXT,
                     error TEXT,
+                    extracted_text TEXT,
                     warning TEXT
                 )
             ''')
         else:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS improve_jobs (
-                    id TEXT PRIMARY KEY,
+                    job_id TEXT PRIMARY KEY,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     status TEXT NOT NULL,
                     progress INTEGER DEFAULT 0,
                     message TEXT,
-                    extracted_text TEXT,
-                    ai_results_json TEXT,
+                    result_html TEXT,
                     error TEXT,
+                    extracted_text TEXT,
                     warning TEXT
                 )
             ''')
@@ -1601,7 +1601,7 @@ def _create_improve_job(extracted_text, warning):
     conn, cursor = _open_db()
     try:
         cursor.execute('''
-            INSERT INTO improve_jobs (id, status, progress, message, extracted_text, warning)
+            INSERT INTO improve_jobs (job_id, status, progress, message, extracted_text, warning)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (job_id, 'queued', 0, 'Queued', extracted_text, warning))
         conn.commit()
@@ -1609,7 +1609,7 @@ def _create_improve_job(extracted_text, warning):
         conn.close()
     return job_id
 
-def _update_improve_job(job_id, status=None, progress=None, message=None, ai_results_json=None, error=None, warning=None):
+def _update_improve_job(job_id, status=None, progress=None, message=None, result_html=None, error=None, warning=None):
     fields = []
     values = []
     if status is not None:
@@ -1621,9 +1621,9 @@ def _update_improve_job(job_id, status=None, progress=None, message=None, ai_res
     if message is not None:
         fields.append("message = ?")
         values.append(message)
-    if ai_results_json is not None:
-        fields.append("ai_results_json = ?")
-        values.append(ai_results_json)
+    if result_html is not None:
+        fields.append("result_html = ?")
+        values.append(result_html)
     if error is not None:
         fields.append("error = ?")
         values.append(error)
@@ -1635,10 +1635,48 @@ def _update_improve_job(job_id, status=None, progress=None, message=None, ai_res
     values.append(job_id)
     conn, cursor = _open_db()
     try:
-        cursor.execute(f"UPDATE improve_jobs SET {', '.join(fields)} WHERE id = ?", values)
+        cursor.execute(f"UPDATE improve_jobs SET {', '.join(fields)} WHERE job_id = ?", values)
         conn.commit()
     finally:
         conn.close()
+
+def _build_result_html(ai_result, highlighted_text):
+    if not ai_result:
+        return '<p class="form__help">No issues detected.</p>'
+    summary = ai_result.get('summary') or {}
+    issues = ai_result.get('issues') or []
+    parts = []
+    parts.append('<div class="improve-legend">')
+    parts.append(
+        f'<span><span class="improve-legend-swatch" style="background:#dc2626"></span> Spelling ({summary.get("spelling", 0)})</span>'
+    )
+    parts.append(
+        f'<span><span class="improve-legend-swatch" style="background:#f59e0b"></span> Grammar ({summary.get("grammar", 0)})</span>'
+    )
+    parts.append(
+        f'<span><span class="improve-legend-swatch" style="background:#2563eb"></span> Style ({summary.get("style", 0)})</span>'
+    )
+    parts.append('</div>')
+    parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>')
+    parts.append(f'<div class="improve-highlight">{highlighted_text}</div>')
+    parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin: var(--space-6) 0 var(--space-3);">Issues</h4>')
+    if issues:
+        parts.append('<ul class="improve-issues">')
+        for issue in issues:
+            kind = escape(issue.get('kind') or 'grammar')
+            message = escape(issue.get('message') or 'Issue detected.')
+            parts.append(f'<li><span class="improve-issues__kind improve-issues__kind-{kind}">{kind.replace("_", " ").title()}</span>')
+            parts.append(f'<span class="improve-issues__message">{message}</span>')
+            suggestions = issue.get('suggestions') or []
+            if suggestions:
+                safe_suggestions = ", ".join(escape(s) for s in suggestions if s)
+                if safe_suggestions:
+                    parts.append(f'<span class="improve-issues__suggestions">Suggestions: {safe_suggestions}</span>')
+            parts.append('</li>')
+        parts.append('</ul>')
+    else:
+        parts.append('<p class="form__help">No issues detected.</p>')
+    return ''.join(parts)
 
 def _process_improve_job(job_id, extracted_text, warning):
     start_time = time.time()
@@ -1663,7 +1701,9 @@ def _process_improve_job(job_id, extracted_text, warning):
         if analysis_error:
             _update_improve_job(job_id, status='error', progress=100, error=analysis_error, message=analysis_error)
             return
-        _update_improve_job(job_id, status='done', progress=100, ai_results_json=json.dumps(ai_result), message='Complete')
+        highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
+        result_html = _build_result_html(ai_result, highlighted)
+        _update_improve_job(job_id, status='done', progress=100, result_html=result_html, message='Complete')
     except Exception:
         app.logger.exception("Improve AI background job failed")
         _update_improve_job(job_id, status='error', progress=100, error='AI checker temporarily unavailable. Please use Human Review.', message='AI checker temporarily unavailable.')
@@ -1937,7 +1977,7 @@ def improve_status(job_id):
     cursor.execute('''
         SELECT status, progress, message
         FROM improve_jobs
-        WHERE id = ?
+        WHERE job_id = ?
     ''', (job_id,))
     row = cursor.fetchone()
     conn.close()
@@ -1958,16 +1998,16 @@ def improve_result(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = _open_db()
     cursor.execute('''
-        SELECT status, message, extracted_text, ai_results_json, error, warning
+        SELECT status, message, extracted_text, result_html, error, warning
         FROM improve_jobs
-        WHERE id = ?
+        WHERE job_id = ?
     ''', (job_id,))
     row = cursor.fetchone()
     conn.close()
     if not row:
         return render_template('improve.html', ai_result=None, highlighted_text=None, extracted_text=None, error="Result not found.", ai_results_json=None, human_notice=None, prefill_text='')
-    status, message, extracted_text, ai_results_json, error, warning = row
-    if status != 'done' or not ai_results_json:
+    status, message, extracted_text, result_html, error, warning = row
+    if status != 'done' or not result_html:
         return render_template(
             'improve.html',
             ai_result=None,
@@ -1978,15 +2018,9 @@ def improve_result(job_id):
             human_notice=None,
             prefill_text=extracted_text or ''
         )
-    try:
-        ai_result = json.loads(ai_results_json)
-    except Exception:
-        ai_result = None
-    highlighted = _build_highlighted_html(extracted_text or '', (ai_result or {}).get('issues', []))
     return render_template(
         'improve_results.html',
-        ai_result=ai_result,
-        highlighted_text=highlighted,
+        result_html=result_html,
         extracted_text=extracted_text or '',
         warning=warning
     )

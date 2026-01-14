@@ -164,32 +164,8 @@
                 <div class="improve-alert">{{ warning }}</div>
                 {% endif %}
 
-                {% if ai_result %}
-                <div class="improve-legend">
-                    <span><span class="improve-legend-swatch" style="background:#dc2626"></span> Spelling ({{ ai_result.summary.spelling }})</span>
-                    <span><span class="improve-legend-swatch" style="background:#f59e0b"></span> Grammar ({{ ai_result.summary.grammar }})</span>
-                    <span><span class="improve-legend-swatch" style="background:#2563eb"></span> Style ({{ ai_result.summary.style }})</span>
-                </div>
-
-                <h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>
-                <div class="improve-highlight">{{ highlighted_text|safe }}</div>
-
-                <h4 class="section__title" style="font-size: var(--fs-2xl); margin: var(--space-6) 0 var(--space-3);">Issues</h4>
-                {% if ai_result.issues %}
-                <ul class="improve-issues">
-                    {% for issue in ai_result.issues %}
-                    <li>
-                        <span class="improve-issues__kind improve-issues__kind-{{ issue.kind }}">{{ issue.kind|replace('_', ' ')|title }}</span>
-                        <span class="improve-issues__message">{{ issue.message }}</span>
-                        {% if issue.suggestions %}
-                        <span class="improve-issues__suggestions">Suggestions: {{ issue.suggestions|join(', ') }}</span>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="form__help">No issues detected.</p>
-                {% endif %}
+                {% if result_html %}
+                {{ result_html|safe }}
 
                 <form action="/improve/human" method="post" style="margin-top: var(--space-6);">
                     <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
