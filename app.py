@@ -1469,6 +1469,7 @@ def admin_set_password():
 
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 IMPROVE_MAX_BYTES = 10 * 1024 * 1024
+IMPROVE_MAX_CHARS = 50000
 
 def _ensure_submissions_table():
     conn, cursor = _open_db()
@@ -1549,51 +1550,179 @@ def _extract_text_from_upload(file_storage):
     return text, None
 
 def _analyze_text_placeholder(text):
+def _run_local_analysis(text):
+    try:
+        from spellchecker import SpellChecker
+    except Exception:
+        return None, "Spelling checker is unavailable. Please install pyspellchecker."
+
+    try:
+        from write_good import write_good
+    except Exception:
+        return None, "Style checker is unavailable. Please install write-good."
+
+    try:
+        from wordfreq import zipf_frequency
+    except Exception:
+        zipf_frequency = None
+
     issues = []
-    for match in re.finditer(r'\bteh\b', text, flags=re.IGNORECASE):
+    spell = SpellChecker()
+
+    email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
+    url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
+    ignored_spans = []
+    for match in email_pattern.finditer(text):
+        ignored_spans.append((match.start(), match.end()))
+    for match in url_pattern.finditer(text):
+        ignored_spans.append((match.start(), match.end()))
+
+    def _overlaps_ignored(start, end):
+        for s, e in ignored_spans:
+            if start < e and end > s:
+                return True
+        return False
+
+    word_pattern = re.compile(r"[A-Za-z][A-Za-z'-]*")
+    for match in word_pattern.finditer(text):
+        start, end = match.start(), match.end()
+        if _overlaps_ignored(start, end):
+            continue
+        word = match.group(0)
+        if len(word) < 3:
+            continue
+        if any(ch.isdigit() for ch in word):
+            continue
+        if word.isupper():
+            continue
+        lower = word.lower()
+        if lower in spell.unknown([lower]):
+            candidates = list(spell.candidates(lower))
+            if candidates:
+                if zipf_frequency:
+                    candidates.sort(key=lambda c: zipf_frequency(c, 'en'), reverse=True)
+                else:
+                    candidates.sort(key=lambda c: spell.word_frequency.frequency(c), reverse=True)
+            suggestions = [c for c in candidates if c != lower][:3]
+            issues.append({
+                'start': start,
+                'end': end,
+                'kind': 'spelling',
+                'message': 'Possible spelling mistake.',
+                'suggestions': suggestions
+            })
+
+    try:
+        style_hits = write_good(text)
+    except Exception:
+        style_hits = []
+    for hit in style_hits:
+        start = hit.get('index') if isinstance(hit, dict) else None
+        length = hit.get('offset') if isinstance(hit, dict) else None
+        if start is None or length is None:
+            continue
+        end = start + length
+        message = hit.get('reason') if isinstance(hit, dict) else None
+        if not message:
+            message = 'Style issue.'
+        issues.append({
+            'start': start,
+            'end': end,
+            'kind': 'style',
+            'message': message,
+            'suggestions': []
+        })
+
+    for match in re.finditer(r'\b([A-Za-z]+)\s+(\1)\b', text, flags=re.IGNORECASE):
         issues.append({
             'start': match.start(),
             'end': match.end(),
-            'type': 'grammar',
-            'message': 'Possible spelling error.'
+            'kind': 'grammar',
+            'message': 'Repeated word.',
+            'suggestions': []
         })
-    for match in re.finditer(r'\bvery\b', text, flags=re.IGNORECASE):
+
+    for match in re.finditer(r' {2,}', text):
         issues.append({
             'start': match.start(),
             'end': match.end(),
-            'type': 'clarity',
-            'message': 'Consider a more precise word.'
+            'kind': 'grammar',
+            'message': 'Extra spaces.',
+            'suggestions': []
         })
-    for match in re.finditer(r'\bcopy(?:ing|ied)?\b', text, flags=re.IGNORECASE):
+
+    for match in re.finditer(r'[.!?]\s+[a-z]', text):
+        start = match.start() + 2
+        word_match = re.match(r'[a-z][A-Za-z\'-]*', text[start:])
+        end = start + (word_match.end() if word_match else 1)
+        issues.append({
+            'start': start,
+            'end': end,
+            'kind': 'grammar',
+            'message': 'Sentence should start with a capital letter.',
+            'suggestions': []
+        })
+
+    sentence_start = 0
+    for match in re.finditer(r'[.!?]', text):
+        sentence_end = match.end()
+        sentence = text[sentence_start:sentence_end]
+        words = word_pattern.findall(sentence)
+        if len(words) > 30:
+            issues.append({
+                'start': sentence_start,
+                'end': sentence_end,
+                'kind': 'style',
+                'message': 'Sentence is very long; consider splitting it.',
+                'suggestions': []
+            })
+        sentence_start = sentence_end
+    if sentence_start < len(text):
+        sentence = text[sentence_start:]
+        words = word_pattern.findall(sentence)
+        if len(words) > 30:
+            issues.append({
+                'start': sentence_start,
+                'end': len(text),
+                'kind': 'style',
+                'message': 'Sentence is very long; consider splitting it.',
+                'suggestions': []
+            })
+
+    for match in re.finditer(r'!!+', text):
         issues.append({
             'start': match.start(),
             'end': match.end(),
-            'type': 'similarity',
-            'message': 'Similarity warning.'
+            'kind': 'grammar',
+            'message': 'Excessive exclamation marks.',
+            'suggestions': []
         })
-    return {
-        'issues': issues,
-        'summary': {
-            'grammar': sum(1 for i in issues if i['type'] == 'grammar'),
-            'clarity': sum(1 for i in issues if i['type'] == 'clarity'),
-            'similarity': sum(1 for i in issues if i['type'] == 'similarity')
-        }
+
+    summary = {
+        'spelling': sum(1 for i in issues if i['kind'] == 'spelling'),
+        'grammar': sum(1 for i in issues if i['kind'] == 'grammar'),
+        'style': sum(1 for i in issues if i['kind'] == 'style')
     }
+    return {'issues': issues, 'summary': summary}, None
 
 def _build_highlighted_html(text, issues):
     if not issues:
         return Markup(escape(text))
     pieces = []
     last_index = 0
-    for issue in sorted(issues, key=lambda i: i['start']):
-        start = issue.get('start', 0)
-        end = issue.get('end', 0)
+    def _issue_length(issue):
+        return (issue.get('end', 0) or 0) - (issue.get('start', 0) or 0)
+
+    sorted_issues = sorted(issues, key=lambda i: (i.get('start', 0), -_issue_length(i)))
+    for issue in sorted_issues:
+        start = issue.get('start', 0) or 0
+        end = issue.get('end', 0) or 0
         if start < last_index or end <= start or start > len(text):
             continue
         pieces.append(escape(text[last_index:start]))
         segment = escape(text[start:end])
-        issue_type = issue.get('type', 'clarity')
-        pieces.append(f'<span class="improve-issue-{issue_type}">{segment}</span>')
+        issue_kind = issue.get('kind') or issue.get('type') or 'style'
+        pieces.append(f'<span class="improve-issue-{issue_kind}">{segment}</span>')
         last_index = end
     pieces.append(escape(text[last_index:]))
     return Markup(''.join(pieces))
@@ -1642,7 +1771,28 @@ def improve_ai():
             human_notice=None
         )
 
-    ai_result = _analyze_text_placeholder(extracted_text)
+    if len(extracted_text) > IMPROVE_MAX_CHARS:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Text is too long. Please submit 50,000 characters or fewer.",
+            ai_results_json=None,
+            human_notice=None
+        )
+
+    ai_result, analysis_error = _run_local_analysis(extracted_text)
+    if analysis_error:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error=analysis_error,
+            ai_results_json=None,
+            human_notice=None
+        )
     highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
     return render_template(
         'improve.html',
@@ -1686,6 +1836,17 @@ def improve_human():
             highlighted_text=None,
             extracted_text=None,
             error="Please paste text or upload a file.",
+            ai_results_json=None,
+            human_notice=None
+        )
+
+    if len(extracted_text) > IMPROVE_MAX_CHARS:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Text is too long. Please submit 50,000 characters or fewer.",
             ai_results_json=None,
             human_notice=None
         )
