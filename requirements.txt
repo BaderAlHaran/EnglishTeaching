@@ -12,4 +12,4 @@ pypdf==5.1.0
 python-docx==1.1.2
 pyspellchecker
 wordfreq
-proselint
+proselint==0.13.0
