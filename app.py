@@ -1596,7 +1596,11 @@ def _run_local_analysis(text):
             continue
         lower = word.lower()
         if lower in spell.unknown([lower]):
-            candidates = list(spell.candidates(lower))
+            candidates = spell.candidates(lower)
+            if not candidates:
+                candidates = []
+            else:
+                candidates = list(candidates)
             if candidates:
                 if zipf_frequency:
                     candidates.sort(key=lambda c: zipf_frequency(c, 'en'), reverse=True)
