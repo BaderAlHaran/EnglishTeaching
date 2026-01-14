@@ -1604,22 +1604,22 @@ def _ensure_improve_jobs_table():
                     cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
                 except Exception:
                     pass
-                for col, col_type in (
-                    ('updated_at', 'TIMESTAMP'),
-                    ('status', 'TEXT'),
-                    ('progress', 'INTEGER'),
-                    ('message', 'TEXT'),
-                    ('result_html', 'TEXT'),
-                    ('result_json', 'TEXT'),
-                    ('error', 'TEXT'),
-                    ('extracted_text', 'TEXT'),
-                    ('warning', 'TEXT')
-                ):
-                    if col not in cols:
-                        try:
-                            cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
-                        except Exception:
-                            pass
+            for col, col_type in (
+                ('updated_at', 'TIMESTAMP'),
+                ('status', 'TEXT'),
+                ('progress', 'INTEGER'),
+                ('message', 'TEXT'),
+                ('result_html', 'TEXT'),
+                ('result_json', 'TEXT'),
+                ('error', 'TEXT'),
+                ('extracted_text', 'TEXT'),
+                ('warning', 'TEXT')
+            ):
+                if col not in cols:
+                    try:
+                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                    except Exception:
+                        pass
         else:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS improve_jobs (
@@ -1650,22 +1650,22 @@ def _ensure_improve_jobs_table():
                     cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
                 except Exception:
                     pass
-                for col, col_type in (
-                    ('updated_at', 'DATETIME'),
-                    ('status', 'TEXT'),
-                    ('progress', 'INTEGER'),
-                    ('message', 'TEXT'),
-                    ('result_html', 'TEXT'),
-                    ('result_json', 'TEXT'),
-                    ('error', 'TEXT'),
-                    ('extracted_text', 'TEXT'),
-                    ('warning', 'TEXT')
-                ):
-                    if col not in cols:
-                        try:
-                            cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
-                        except Exception:
-                            pass
+            for col, col_type in (
+                ('updated_at', 'DATETIME'),
+                ('status', 'TEXT'),
+                ('progress', 'INTEGER'),
+                ('message', 'TEXT'),
+                ('result_html', 'TEXT'),
+                ('result_json', 'TEXT'),
+                ('error', 'TEXT'),
+                ('extracted_text', 'TEXT'),
+                ('warning', 'TEXT')
+            ):
+                if col not in cols:
+                    try:
+                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                    except Exception:
+                        pass
         conn.commit()
     finally:
         conn.close()
