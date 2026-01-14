@@ -1916,6 +1916,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
 
     email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
     url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
+    end_punct_count = len(re.findall(r'[.!?]', text))
+    token_count = len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
     ignored_spans = [(m.start(), m.end()) for m in email_pattern.finditer(text)]
     ignored_spans += [(m.start(), m.end()) for m in url_pattern.finditer(text)]
 
@@ -1953,9 +1955,9 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
     def _preprocess_sentences(source_text):
         if not source_text.strip():
             return []
-        end_punct_count = len(re.findall(r'[.!?]', source_text))
+        end_punct = len(re.findall(r'[.!?]', source_text))
         words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", source_text)
-        if end_punct_count >= 2 or len(words) <= 12:
+        if end_punct >= 2 or len(words) <= 12:
             return []
         patterns = [
             r"\bhi\b",
@@ -1993,7 +1995,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             if len(seg_words) <= 15:
                 refined.append(segment)
                 continue
-            split_match = re.search(r"\b(and|but|because|so)\b", segment, flags=re.IGNORECASE)
+            split_match = re.search(r"\b(and|but|because|so|however|therefore|by contrast)\b", segment, flags=re.IGNORECASE)
             if split_match:
                 idx = split_match.start()
                 left = segment[:idx].strip()
@@ -2036,7 +2038,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         return updated
 
     def _split_on_conjunction(sentence_text):
-        match = re.search(r"\b(and|but|because|so)\b", sentence_text, flags=re.IGNORECASE)
+        match = re.search(r"\b(and|but|because|so|however|therefore|by contrast)\b", sentence_text, flags=re.IGNORECASE)
         if not match:
             return None
         idx = match.start()
@@ -2108,23 +2110,24 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 })
         sentence_flags = {s['id']: set() for s in sentences}
 
-    if not sentences:
+    if end_punct_count < 2 and token_count > 12:
         pseudo = _preprocess_sentences(text)
-        offset = 0
-        sentences = []
-        for segment in pseudo:
-            start = text.find(segment, offset)
-            if start == -1:
-                start = offset
-            end = start + len(segment)
-            sentences.append({
-                'id': len(sentences) + 1,
-                'start': start,
-                'end': end,
-                'text': segment.strip()
-            })
-            offset = end
-        sentence_flags = {s['id']: set() for s in sentences}
+        if pseudo:
+            offset = 0
+            sentences = []
+            for segment in pseudo:
+                start = text.find(segment, offset)
+                if start == -1:
+                    start = offset
+                end = start + len(segment)
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': start,
+                    'end': end,
+                    'text': segment.strip()
+                })
+                offset = end
+            sentence_flags = {s['id']: set() for s in sentences}
 
     if progress_cb:
         progress_cb(18, "Checking grammar...")
