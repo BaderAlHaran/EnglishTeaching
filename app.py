@@ -1587,20 +1587,32 @@ def _run_local_analysis(text):
         start, end = match.start(), match.end()
         if _overlaps_ignored(start, end):
             continue
-        word = match.group(0)
-        if len(word) < 3:
+        word = match.group(0) or ''
+        clean = word.strip()
+        if not clean:
+            app.logger.info("Skipping token len=%s reason=empty", len(word))
             continue
-        if any(ch.isdigit() for ch in word):
+        if len(clean) < 3:
+            app.logger.info("Skipping token len=%s reason=too_short", len(clean))
             continue
-        if word.isupper():
+        if any(ch.isdigit() for ch in clean):
+            app.logger.info("Skipping token len=%s reason=has_digits", len(clean))
             continue
-        lower = word.lower()
+        if clean.isupper():
+            app.logger.info("Skipping token len=%s reason=all_caps", len(clean))
+            continue
+        token_core = re.sub(r"['-]", "", clean)
+        if not token_core or not token_core.isalpha():
+            app.logger.info("Skipping token len=%s reason=non_alpha", len(clean))
+            continue
+        lower = str(clean.lower())
         if lower in spell.unknown([lower]):
-            candidates = spell.candidates(lower)
-            if not candidates:
-                candidates = []
-            else:
-                candidates = list(candidates)
+            try:
+                cand = spell.candidates(lower) or []
+                candidates = list(cand)
+            except Exception:
+                app.logger.info("Skipping token len=%s reason=candidates_error", len(clean))
+                continue
             if candidates:
                 if zipf_frequency:
                     candidates.sort(key=lambda c: zipf_frequency(c, 'en'), reverse=True)
