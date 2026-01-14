@@ -2026,11 +2026,13 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         updated = sentence_text
         updated = re.sub(r"\b(i)(?=\b)", 'I', updated)
         updated = re.sub(r"\biI\b", 'I', updated)
+        updated = re.sub(r"\bthis is\s+([A-Za-z][\w-]*)\s+how are\b", lambda m: f"this is {m.group(1)}. How are", updated, flags=re.IGNORECASE)
         updated = re.sub(r"\bthis is\s+([A-Za-z][\w-]*)", lambda m: f"this is {m.group(1).capitalize()}", updated, flags=re.IGNORECASE)
         updated = re.sub(r"\bmy name is\s+([A-Za-z][\w-]*)", lambda m: f"my name is {m.group(1).capitalize()}", updated, flags=re.IGNORECASE)
         updated = updated.strip()
         if updated and updated[0].islower():
             updated = updated[0].upper() + updated[1:]
+        updated = re.sub(r"^(Hi|Hello|Hey)\b(?!,)", r"\1,", updated)
         return updated
 
     def _split_on_conjunction(sentence_text):
@@ -2051,6 +2053,14 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         if stripped[-1] in '.!?':
             return stripped
         return stripped + '.'
+
+    def _is_structural_rewrite(original_text, rewritten_text):
+        if not rewritten_text or not original_text:
+            return False
+        original_end = original_text.rstrip().endswith(('.', '!', '?'))
+        rewritten_end = rewritten_text.rstrip().endswith(('.', '!', '?'))
+        split = bool(re.search(r'[.!?]\s+[A-Z]', rewritten_text))
+        return split or (not original_end and rewritten_end)
 
     doc = None
     if nlp is not None:
@@ -2160,13 +2170,17 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 continue
 
             if token.pos_ == 'PROPN' and token.text and token.text[0].islower() and not token.text.isupper():
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
-                sentence_flags.get(_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences), set()).add('proper_noun')
+                sid = _sentence_id_for_span(token.idx, token.idx + len(token.text), sentences)
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], sentence_id=sid)
+                if sid is not None:
+                    sentence_flags.setdefault(sid, set()).add('proper_noun')
 
             if token.lower_ in allowlist_lower and token.text and token.text[0].islower() and not token.text.isupper():
+                sid = _sentence_id_for_span(token.idx, token.idx + len(token.text), sentences)
                 proper = token.text.capitalize()
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
-                sentence_flags.get(_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences), set()).add('proper_noun')
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], sentence_id=sid)
+                if sid is not None:
+                    sentence_flags.setdefault(sid, set()).add('proper_noun')
 
             if token.dep_ in {'nsubj', 'nsubjpass'} and token.head.pos_ in {'VERB', 'AUX'}:
                 subj_num = _token_number(token)
@@ -2308,7 +2322,10 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         if re.search(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
             for match in re.finditer(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
                 verb = match.group(2)
-                if not verb.endswith('s') and verb not in {'is', 'was', 'has', 'does'}:
+                auxiliaries = {'is', 'was', 'has', 'does', 'did', 'will', 'would', 'can', 'could', 'should', 'might', 'may', 'must'}
+                if verb in auxiliaries or verb.endswith(('ed', 'ing')):
+                    continue
+                if not verb.endswith('s'):
                     _add_issue(sentence['start'] + match.start(2), sentence['start'] + match.end(2), 'grammar', 'Add -s for third-person singular.', [], sentence_id=sent_id)
 
     if progress_cb:
@@ -2391,7 +2408,10 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             except Exception:
                 app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
                 continue
-            suggestions = [c for c in candidates if c != lower][:3]
+            suggestions = [c for c in candidates if c != lower]
+            if zipf_frequency:
+                suggestions = [c for c in suggestions if zipf_frequency(c, 'en') >= 4.0]
+            suggestions = suggestions[:3]
             _add_issue(start, end, 'spelling', 'Possible spelling mistake.', suggestions, sentence_id=_sentence_id_for_span(start, end, sentences))
             if progress_cb and idx % 80 == 0:
                 progress_cb(60 + int(15 * idx / total_tokens), "Checking spelling...")
@@ -2431,11 +2451,17 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 suggestion = split_suggestion
             suggestion = _with_end_punct(suggestion)
             templates = _rewrite_templates(original)
+            rewrites_added = 0
             if templates:
                 for template in templates:
-                    _add_issue(sentence['start'], sentence['end'], 'style', template, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
-            if suggestion and suggestion.strip() and suggestion.strip() != original.strip():
-                _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
+                    if rewrites_added >= 2:
+                        break
+                    if _is_structural_rewrite(original, template):
+                        _add_issue(sentence['start'], sentence['end'], 'style', template, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
+                        rewrites_added += 1
+            if rewrites_added < 2 and suggestion and suggestion.strip() and suggestion.strip() != original.strip():
+                if _is_structural_rewrite(original, suggestion):
+                    _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
 
     def _dedupe_issues(items):
         seen = set()
