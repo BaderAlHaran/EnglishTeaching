@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Improve Your Writing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --border: #d9d9d9;
+      --muted: #6b6b6b;
+      --bg: #f7f7f7;
+      --card: #ffffff;
+      --danger: #b00020;
+      --ok: #0b6d2f;
+    }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: var(--bg);
+      color: #1e1e1e;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 32px auto;
+      padding: 0 16px 48px;
+    }
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .lead {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .panel h2 {
+      margin-top: 0;
+      font-size: 22px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin: 12px 0 6px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: inherit;
+    }
+    input[type="file"] {
+      margin-top: 6px;
+    }
+    .actions {
+      margin-top: 14px;
+    }
+    button {
+      background: #111;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #444;
+    }
+    .note {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .error {
+      color: var(--danger);
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    .notice {
+      color: var(--ok);
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    .results {
+      border-top: 1px solid var(--border);
+      margin-top: 16px;
+      padding-top: 16px;
+    }
+    .issue.grammar { background: rgba(255, 0, 0, 0.2); }
+    .issue.clarity { background: rgba(0, 90, 255, 0.2); }
+    .issue.similarity { background: rgba(128, 0, 128, 0.2); }
+    .legend span {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+    }
+    .legend .grammar { background: rgba(255, 0, 0, 0.2); }
+    .legend .clarity { background: rgba(0, 90, 255, 0.2); }
+    .legend .similarity { background: rgba(128, 0, 128, 0.2); }
+    .highlight-box {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      background: #fff;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Improve Your Writing</h1>
+    <p class="lead">Choose the option that suits you. Both are optional and independent.</p>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+    {% if human_notice %}
+      <div class="notice">{{ human_notice }}</div>
+    {% endif %}
+
+    <div class="panel">
+      <h2>Option 1: AI Check (Optional)</h2>
+      <p class="note">Paste text or upload a PDF/DOCX. We'll return your text with highlighted issues.</p>
+      <form action="/improve/ai" method="post" enctype="multipart/form-data">
+        <label for="ai-text">Paste your text</label>
+        <textarea id="ai-text" name="text" placeholder="Paste your text here..."></textarea>
+
+        <label for="ai-file">Or upload a file (.pdf, .docx)</label>
+        <input id="ai-file" type="file" name="file" accept=".pdf,.docx">
+
+        <div class="actions">
+          <button type="submit">Run AI Check</button>
+        </div>
+      </form>
+
+      {% if ai_result %}
+      <div class="results">
+        <div class="legend">
+          <span class="grammar">Grammar issues</span>
+          <span class="clarity">Clarity/style issues</span>
+          <span class="similarity">Similarity warnings</span>
+        </div>
+        <h3>Highlighted Text</h3>
+        <div class="highlight-box">{{ highlighted_text|safe }}</div>
+
+        <h3>Summary</h3>
+        <p class="note">
+          Grammar: {{ ai_result.summary.grammar }} | Clarity: {{ ai_result.summary.clarity }} | Similarity: {{ ai_result.summary.similarity }}
+        </p>
+
+        <form action="/improve/human" method="post">
+          <textarea name="extracted_text" style="display:none;">{{ extracted_text|e }}</textarea>
+          <textarea name="ai_results_json" style="display:none;">{{ ai_results_json|e }}</textarea>
+          <div class="actions">
+            <button class="secondary" type="submit">Send to Human for Correction</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Option 2: Human Review Only (No AI)</h2>
+      <p class="note">Paste text or upload a PDF/DOCX. Your submission goes straight to a human reviewer.</p>
+      <form action="/improve/human" method="post" enctype="multipart/form-data">
+        <label for="human-text">Paste your text</label>
+        <textarea id="human-text" name="text" placeholder="Paste your text here..."></textarea>
+
+        <label for="human-file">Or upload a file (.pdf, .docx)</label>
+        <input id="human-file" type="file" name="file" accept=".pdf,.docx">
+
+        <div class="actions">
+          <button type="submit">Send to Human Review</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

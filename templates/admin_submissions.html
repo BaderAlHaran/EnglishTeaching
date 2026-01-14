@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Submissions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      color: #1e1e1e;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 40px;
+    }
+    h1 { margin-bottom: 16px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #ddd;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+    th {
+      background: #fafafa;
+    }
+    details {
+      margin-top: 6px;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f8f8f8;
+      padding: 10px;
+      border-radius: 6px;
+    }
+    .muted {
+      color: #666;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Improve Your Writing - Submissions</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Created</th>
+          <th>Mode</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in submissions %}
+        <tr>
+          <td>{{ sub.id }}</td>
+          <td>{{ sub.created_at }}</td>
+          <td>{{ sub.mode }}</td>
+          <td>{{ sub.status }}</td>
+          <td>
+            <details>
+              <summary>View text</summary>
+              <pre>{{ sub.extracted_text|e }}</pre>
+              {% if sub.ai_results_json %}
+                <div class="muted">AI Results</div>
+                <pre>{{ sub.ai_results_json|e }}</pre>
+              {% endif %}
+            </details>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

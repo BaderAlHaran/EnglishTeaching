@@ -8,6 +8,8 @@ import secrets
 import os
 import mimetypes
 import uuid
+import json
+import io
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import re
@@ -15,6 +17,7 @@ import logging
 import resend
 from urllib.parse import urlparse
 import threading
+from markupsafe import escape, Markup
 
 import time
 from collections import deque
@@ -1463,6 +1466,272 @@ def admin_set_password():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+IMPROVE_MAX_BYTES = 10 * 1024 * 1024
+
+def _ensure_submissions_table():
+    conn, cursor = _open_db()
+    try:
+        if _is_postgres():
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS submissions (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    mode TEXT NOT NULL,
+                    extracted_text TEXT NOT NULL,
+                    ai_results_json TEXT,
+                    status TEXT DEFAULT 'new'
+                )
+            ''')
+        else:
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    mode TEXT NOT NULL,
+                    extracted_text TEXT NOT NULL,
+                    ai_results_json TEXT,
+                    status TEXT DEFAULT 'new'
+                )
+            ''')
+        conn.commit()
+    finally:
+        conn.close()
+
+def _read_upload_bytes(file_storage):
+    file_storage.stream.seek(0, os.SEEK_END)
+    size = file_storage.stream.tell()
+    file_storage.stream.seek(0)
+    if size > IMPROVE_MAX_BYTES:
+        return None, "File too large. Max size is 10MB."
+    data = file_storage.stream.read()
+    file_storage.stream.seek(0)
+    return data, None
+
+def _extract_text_from_upload(file_storage):
+    filename = (file_storage.filename or '').strip()
+    if '.' not in filename:
+        return None, "File must have a .pdf or .docx extension."
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in IMPROVE_ALLOWED_EXTENSIONS:
+        return None, "Unsupported file type. Only PDF and DOCX are allowed."
+
+    data, err = _read_upload_bytes(file_storage)
+    if err:
+        return None, err
+
+    if ext == 'pdf':
+        try:
+            import pypdf
+        except Exception:
+            return None, "PDF support is unavailable. Please install pypdf."
+        reader = pypdf.PdfReader(io.BytesIO(data))
+        parts = []
+        for page in reader.pages:
+            try:
+                parts.append(page.extract_text() or '')
+            except Exception:
+                parts.append('')
+        return "\n".join(parts).strip(), None
+
+    try:
+        import docx
+    except Exception:
+        return None, "DOCX support is unavailable. Please install python-docx."
+    document = docx.Document(io.BytesIO(data))
+    text = "\n".join(p.text for p in document.paragraphs).strip()
+    return text, None
+
+def _analyze_text_placeholder(text):
+    issues = []
+    for match in re.finditer(r'\bteh\b', text, flags=re.IGNORECASE):
+        issues.append({
+            'start': match.start(),
+            'end': match.end(),
+            'type': 'grammar',
+            'message': 'Possible spelling error.'
+        })
+    for match in re.finditer(r'\bvery\b', text, flags=re.IGNORECASE):
+        issues.append({
+            'start': match.start(),
+            'end': match.end(),
+            'type': 'clarity',
+            'message': 'Consider a more precise word.'
+        })
+    for match in re.finditer(r'\bcopy(?:ing|ied)?\b', text, flags=re.IGNORECASE):
+        issues.append({
+            'start': match.start(),
+            'end': match.end(),
+            'type': 'similarity',
+            'message': 'Similarity warning.'
+        })
+    return {
+        'issues': issues,
+        'summary': {
+            'grammar': sum(1 for i in issues if i['type'] == 'grammar'),
+            'clarity': sum(1 for i in issues if i['type'] == 'clarity'),
+            'similarity': sum(1 for i in issues if i['type'] == 'similarity')
+        }
+    }
+
+def _build_highlighted_html(text, issues):
+    if not issues:
+        return Markup(escape(text))
+    pieces = []
+    last_index = 0
+    for issue in sorted(issues, key=lambda i: i['start']):
+        start = issue.get('start', 0)
+        end = issue.get('end', 0)
+        if start < last_index or end <= start or start > len(text):
+            continue
+        pieces.append(escape(text[last_index:start]))
+        segment = escape(text[start:end])
+        issue_type = issue.get('type', 'clarity')
+        pieces.append(f'<span class="issue {issue_type}">{segment}</span>')
+        last_index = end
+    pieces.append(escape(text[last_index:]))
+    return Markup(''.join(pieces))
+
+@app.route('/improve', methods=['GET'])
+def improve():
+    return render_template(
+        'improve.html',
+        ai_result=None,
+        highlighted_text=None,
+        extracted_text=None,
+        error=None,
+        ai_results_json=None,
+        human_notice=None
+    )
+
+@app.route('/improve/ai', methods=['POST'])
+def improve_ai():
+    text_input = (request.form.get('text') or '').strip()
+    file = request.files.get('file')
+
+    extracted_text = ''
+    if file and file.filename:
+        extracted_text, err = _extract_text_from_upload(file)
+        if err:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error=err,
+                ai_results_json=None,
+                human_notice=None
+            )
+    else:
+        extracted_text = text_input
+
+    if not extracted_text:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Please paste text or upload a file.",
+            ai_results_json=None,
+            human_notice=None
+        )
+
+    ai_result = _analyze_text_placeholder(extracted_text)
+    highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
+    return render_template(
+        'improve.html',
+        ai_result=ai_result,
+        highlighted_text=highlighted,
+        extracted_text=extracted_text,
+        error=None,
+        ai_results_json=json.dumps(ai_result),
+        human_notice=None
+    )
+
+@app.route('/improve/human', methods=['POST'])
+def improve_human():
+    text_input = (request.form.get('text') or '').strip()
+    file = request.files.get('file')
+    provided_text = (request.form.get('extracted_text') or '').strip()
+    ai_results_json = (request.form.get('ai_results_json') or '').strip()
+
+    extracted_text = ''
+    if provided_text:
+        extracted_text = provided_text
+    elif file and file.filename:
+        extracted_text, err = _extract_text_from_upload(file)
+        if err:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error=err,
+                ai_results_json=None,
+                human_notice=None
+            )
+    else:
+        extracted_text = text_input
+
+    if not extracted_text:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Please paste text or upload a file.",
+            ai_results_json=None,
+            human_notice=None
+        )
+
+    mode = 'after_ai' if ai_results_json else 'human_only'
+    _ensure_submissions_table()
+    conn, cursor = _open_db()
+    try:
+        cursor.execute('''
+            INSERT INTO submissions (mode, extracted_text, ai_results_json, status)
+            VALUES (?, ?, ?, ?)
+        ''', (mode, extracted_text, ai_results_json or None, 'new'))
+        conn.commit()
+    finally:
+        conn.close()
+
+    notice = "Submitted for human review."
+    return render_template(
+        'improve.html',
+        ai_result=None,
+        highlighted_text=None,
+        extracted_text=None,
+        error=None,
+        ai_results_json=None,
+        human_notice=notice
+    )
+
+@app.route('/admin/submissions', methods=['GET'])
+@require_login
+def admin_submissions():
+    _ensure_submissions_table()
+    conn, cursor = _open_db()
+    cursor.execute('''
+        SELECT id, created_at, mode, extracted_text, ai_results_json, status
+        FROM submissions
+        ORDER BY created_at DESC
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+
+    submissions = []
+    for row in rows:
+        submissions.append({
+            'id': row[0],
+            'created_at': row[1],
+            'mode': row[2],
+            'extracted_text': row[3],
+            'ai_results_json': row[4],
+            'status': row[5]
+        })
+    return render_template('admin_submissions.html', submissions=submissions)
 
 if __name__ == '__main__':
     # Initialize database
