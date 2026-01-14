@@ -1757,6 +1757,8 @@ def _build_result_html(ai_result, highlighted_text):
             parts.append(f'<p class="form__help"><strong>Sentence {display_idx}:</strong> {sentence_text}</p>')
             rewrite_issues = [i for i in sentence_issues if i.get('is_rewrite')]
             regular_issues = [i for i in sentence_issues if not i.get('is_rewrite')]
+            kind_priority = {'grammar': 0, 'spelling': 1, 'style': 2}
+            regular_issues.sort(key=lambda item: (kind_priority.get(item.get('kind'), 3), item.get('start', 0)))
             if rewrite_issues:
                 for issue in rewrite_issues:
                     message = escape(issue.get('message') or '')
@@ -1929,7 +1931,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 return s['id']
         return None
 
-    def _add_issue(start, end, kind, message, suggestions=None, no_highlight=False, flag=None, sentence_id=None, is_rewrite=False):
+    def _add_issue(start, end, kind, message, suggestions=None, no_highlight=False, sentence_id=None, is_rewrite=False):
         if start is None or end is None:
             return
         if start < 0 or end <= start or start > len(text):
@@ -1945,14 +1947,118 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             'is_rewrite': is_rewrite
         })
 
+    def _is_code_like(word):
+        return any(sym in word for sym in ('_', '/', '\\', '::', '->', '=>', '()')) or (word[:1].islower() and any(ch.isupper() for ch in word[1:]))
+
+    def _preprocess_sentences(source_text):
+        if not source_text.strip():
+            return []
+        end_punct_count = len(re.findall(r'[.!?]', source_text))
+        words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", source_text)
+        if end_punct_count >= 2 or len(words) <= 12:
+            return []
+        patterns = [
+            r"\bhi\b",
+            r"\bhello\b",
+            r"\bhey\b",
+            r"\bthis is\b",
+            r"\bmy name is\b",
+            r"\bhow are\b",
+            r"\bhow is\b",
+            r"\bi am\b",
+            r"\bi'm\b"
+        ]
+        points = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, source_text, flags=re.IGNORECASE):
+                idx = match.start()
+                if idx != 0:
+                    points.append(idx)
+        if not points:
+            return []
+        points = sorted(set(points))
+        segments = []
+        last = 0
+        for idx in points:
+            segment = source_text[last:idx].strip()
+            if segment:
+                segments.append(segment)
+            last = idx
+        tail = source_text[last:].strip()
+        if tail:
+            segments.append(tail)
+        refined = []
+        for segment in segments:
+            seg_words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", segment)
+            if len(seg_words) <= 15:
+                refined.append(segment)
+                continue
+            split_match = re.search(r"\b(and|but|because|so)\b", segment, flags=re.IGNORECASE)
+            if split_match:
+                idx = split_match.start()
+                left = segment[:idx].strip()
+                right = segment[idx:].strip()
+                if left:
+                    refined.append(left)
+                if right:
+                    refined.append(right)
+            else:
+                refined.append(segment)
+        return refined
+
+    def _rewrite_templates(sentence_text):
+        base = sentence_text.strip()
+        if not base:
+            return []
+        lowered = base.lower()
+        name_match = re.search(r'\bthis is\s+([A-Za-z][\w-]*)', base, flags=re.IGNORECASE)
+        name = name_match.group(1) if name_match else None
+        if name:
+            name = name.capitalize()
+        casual = None
+        formal = None
+        if 'how are you' in lowered and 'this is' in lowered:
+            casual = f"Hi, this is {name or 'your name'}. How are you doing today?"
+            formal = f"Hello, this is {name or 'your name'}. How are you doing today?"
+        return [s for s in (casual, formal) if s]
+
+    def _apply_rewrite_rules(sentence_text):
+        updated = sentence_text
+        updated = re.sub(r"\b(i)(?=\b)", 'I', updated)
+        updated = re.sub(r"\biI\b", 'I', updated)
+        updated = re.sub(r"\bthis is\s+([A-Za-z][\w-]*)", lambda m: f"this is {m.group(1).capitalize()}", updated, flags=re.IGNORECASE)
+        updated = re.sub(r"\bmy name is\s+([A-Za-z][\w-]*)", lambda m: f"my name is {m.group(1).capitalize()}", updated, flags=re.IGNORECASE)
+        updated = updated.strip()
+        if updated and updated[0].islower():
+            updated = updated[0].upper() + updated[1:]
+        return updated
+
+    def _split_on_conjunction(sentence_text):
+        match = re.search(r"\b(and|but|because|so)\b", sentence_text, flags=re.IGNORECASE)
+        if not match:
+            return None
+        idx = match.start()
+        left = sentence_text[:idx].strip()
+        right = sentence_text[idx:].strip()
+        if left and right:
+            return f"{left}. {right[0].upper() + right[1:] if right else right}"
+        return None
+
+    def _with_end_punct(sentence_text):
+        stripped = sentence_text.rstrip()
+        if not stripped:
+            return sentence_text
+        if stripped[-1] in '.!?':
+            return stripped
+        return stripped + '.'
+
+    doc = None
     if nlp is not None:
         try:
             doc = nlp(text)
         except Exception as exc:
             doc = None
             warnings.append(f"NLP processing failed: {exc}")
-    else:
-        doc = None
 
     sentences = []
     sentence_flags = {}
@@ -1968,41 +2074,83 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                     'text': segment.strip()
                 })
         sentence_flags = {s['id']: set() for s in sentences}
+    else:
+        s_start = 0
+        for match in re.finditer(r'[.!?]+', text):
+            s_end = match.end()
+            segment = text[s_start:s_end]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': s_start,
+                    'end': s_end,
+                    'text': segment.strip()
+                })
+            s_start = s_end
+        if s_start < len(text):
+            segment = text[s_start:]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': s_start,
+                    'end': len(text),
+                    'text': segment.strip()
+                })
+        sentence_flags = {s['id']: set() for s in sentences}
 
-        if progress_cb:
-            progress_cb(18, "Checking grammar...")
+    if not sentences:
+        pseudo = _preprocess_sentences(text)
+        offset = 0
+        sentences = []
+        for segment in pseudo:
+            start = text.find(segment, offset)
+            if start == -1:
+                start = offset
+            end = start + len(segment)
+            sentences.append({
+                'id': len(sentences) + 1,
+                'start': start,
+                'end': end,
+                'text': segment.strip()
+            })
+            offset = end
+        sentence_flags = {s['id']: set() for s in sentences}
 
-        comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
-        greetings = {'hi', 'hello', 'dear'}
-        obj_pronouns = {'me', 'him', 'her', 'us', 'them'}
-        subj_pronouns = {'i', 'he', 'she', 'we', 'they'}
-        determiners = {'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
-        count_nouns = {
-            'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
-            'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
-            'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
-        }
+    if progress_cb:
+        progress_cb(18, "Checking grammar...")
 
-        def _token_number(token):
-            numbers = token.morph.get('Number')
-            if numbers:
-                return numbers[0]
-            if token.lower_ in {'he', 'she', 'it', 'this', 'that', 'someone', 'everybody'}:
-                return 'Sing'
-            if token.lower_ in {'they', 'we', 'you'}:
-                return 'Plur'
-            return None
+    comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
+    greetings = {'hi', 'hello', 'dear'}
+    obj_pronouns = {'me', 'him', 'her', 'us', 'them'}
+    subj_pronouns = {'i', 'he', 'she', 'we', 'they'}
+    determiners = {'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
+    count_nouns = {
+        'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
+        'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
+        'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
+    }
 
-        def _verb_number(token):
-            numbers = token.morph.get('Number')
-            if numbers:
-                return numbers[0]
-            if token.tag_ == 'VBZ':
-                return 'Sing'
-            if token.tag_ == 'VBP':
-                return 'Plur'
-            return None
+    def _token_number(token):
+        numbers = token.morph.get('Number')
+        if numbers:
+            return numbers[0]
+        if token.lower_ in {'he', 'she', 'it', 'this', 'that', 'someone', 'everybody'}:
+            return 'Sing'
+        if token.lower_ in {'they', 'we', 'you'}:
+            return 'Plur'
+        return None
 
+    def _verb_number(token):
+        numbers = token.morph.get('Number')
+        if numbers:
+            return numbers[0]
+        if token.tag_ == 'VBZ':
+            return 'Sing'
+        if token.tag_ == 'VBP':
+            return 'Plur'
+        return None
+
+    if doc is not None:
         for token in doc:
             if _time_guard():
                 break
@@ -2012,11 +2160,13 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 continue
 
             if token.pos_ == 'PROPN' and token.text and token.text[0].islower() and not token.text.isupper():
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], flag='proper_noun', sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+                sentence_flags.get(_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences), set()).add('proper_noun')
 
             if token.lower_ in allowlist_lower and token.text and token.text[0].islower() and not token.text.isupper():
                 proper = token.text.capitalize()
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], flag='proper_noun', sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+                sentence_flags.get(_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences), set()).add('proper_noun')
 
             if token.dep_ in {'nsubj', 'nsubjpass'} and token.head.pos_ in {'VERB', 'AUX'}:
                 subj_num = _token_number(token)
@@ -2071,120 +2221,98 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             if token.lower_ == 'then' and prev_token and prev_token.lower_ in comparatives:
                 _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "than" for comparisons.', ['than'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-            if token.lower_ == 'effect' and prev_token and prev_token.lower_ == 'to':
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "affect" as a verb.', ['affect'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+    if progress_cb:
+        progress_cb(32, "Checking sentence rules...")
 
-            if token.lower_ == 'affect' and prev_token and prev_token.lower_ == 'the':
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "effect" as a noun.', ['effect'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+    for sentence in sentences:
+        if _time_guard():
+            break
+        sent_text = text[sentence['start']:sentence['end']]
+        sent_id = sentence['id']
+        words = list(re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", sent_text))
+        if len(words) < 2:
+            continue
 
-        if progress_cb:
-            progress_cb(32, "Checking sentence rules...")
+        first_alpha = re.search(r'[A-Za-z]', sent_text)
+        if first_alpha:
+            pos = sentence['start'] + first_alpha.start()
+            if text[pos:pos + 1].islower():
+                sentence_flags.setdefault(sent_id, set()).add('capitalization')
+                _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], sentence_id=sent_id)
 
-        for sent in doc.sents:
-            if _time_guard():
-                break
-            sent_text = sent.text
-            sent_id = _sentence_id_for_span(sent.start_char, sent.end_char, sentences)
-            if not sent_text.strip():
-                continue
-            sent_tokens = [t for t in sent if not t.is_space]
-            if len(sent_tokens) < 2:
-                continue
+        stripped = sent_text.rstrip()
+        if stripped and stripped[-1] not in '.!?':
+            end_pos = sentence['start'] + len(stripped)
+            if end_pos > sentence['start']:
+                sentence_flags.setdefault(sent_id, set()).add('end_punctuation')
+                _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], sentence_id=sent_id)
 
-            first_alpha = re.search(r'[A-Za-z]', sent_text)
-            if first_alpha:
-                pos = sent.start_char + first_alpha.start()
-                if text[pos:pos + 1].islower():
-                    sentence_flags.setdefault(sent_id, set()).add('capitalization')
-                    _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], sentence_id=sent_id)
+        if re.search(r"\bi\b", sent_text):
+            for match in re.finditer(r"\bi\b", sent_text):
+                _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Capitalize "I" when used as a pronoun.', ['I'], sentence_id=sent_id)
 
-            stripped = sent_text.rstrip()
-            if stripped and stripped[-1] not in '.!?':
-                end_pos = sent.start_char + len(stripped)
-                if end_pos > sent.start_char:
-                    sentence_flags.setdefault(sent_id, set()).add('end_punctuation')
-                    _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], sentence_id=sent_id)
+        for match in re.finditer(r"\b(youre|dont|cant|isnt|im|ive|ill|weve|theyre)\b", sent_text, flags=re.IGNORECASE):
+            missing = match.group(1).lower()
+            mapping = {
+                'youre': "you're",
+                'dont': "don't",
+                'cant': "can't",
+                'isnt': "isn't",
+                'im': "I'm",
+                'ive': "I've",
+                'ill': "I'll",
+                'weve': "we've",
+                'theyre': "they're"
+            }
+            suggestion = mapping.get(missing, "")
+            _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Missing apostrophe in contraction.', [suggestion] if suggestion else [], sentence_id=sent_id)
 
-            first = sent_tokens[0].lower_
-            if first in greetings and len(sent_tokens) >= 2:
-                name_token = sent_tokens[1]
-                if name_token.pos_ == 'PROPN' or name_token.text.rstrip('.') in {'Mr', 'Ms', 'Mrs', 'Dr'}:
-                    next_char_index = name_token.idx + len(name_token.text)
-                    if next_char_index < len(text) and text[next_char_index] != ',':
-                        _add_issue(name_token.idx, name_token.idx + len(name_token.text), 'grammar', 'Add a comma after the greeting name.', [','], sentence_id=sent_id)
+        for match in re.finditer(r"\b([A-Za-z]+)\s+\1\b", sent_text, flags=re.IGNORECASE):
+            _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'style', 'Repeated word.', [], sentence_id=sent_id)
 
-            conj_tokens = [t for t in sent_tokens if t.lower_ in {'and', 'but', 'so'}]
-            verb_roots = [t for t in sent_tokens if t.dep_ in {'ROOT', 'conj'} and t.pos_ in {'VERB', 'AUX'}]
-            if len(verb_roots) >= 2 and conj_tokens:
-                if ',' not in sent_text and ';' not in sent_text:
-                    conj = conj_tokens[0]
-                    sentence_flags.setdefault(sent_id, set()).add('run_on')
-                    _add_issue(conj.idx, conj.idx + len(conj.text), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], sentence_id=sent_id)
+        first_word = words[0].group(0).lower()
+        if first_word in greetings and len(words) >= 2:
+            name_token = words[1]
+            after_name_index = sentence['start'] + name_token.end()
+            if after_name_index < len(text) and text[after_name_index] != ',':
+                _add_issue(sentence['start'] + name_token.start(), sentence['start'] + name_token.end(), 'grammar', 'Add a comma after the greeting name.', [','], sentence_id=sent_id)
 
-        if progress_cb:
-            progress_cb(48, "Checking mechanics...")
-    else:
-        s_start = 0
-        for match in re.finditer(r'[.!?]+', text):
-            s_end = match.end()
-            segment = text[s_start:s_end]
-            if segment.strip():
-                sentences.append({
-                    'id': len(sentences) + 1,
-                    'start': s_start,
-                    'end': s_end,
-                    'text': segment.strip()
-                })
-            s_start = s_end
-        if s_start < len(text):
-            segment = text[s_start:]
-            if segment.strip():
-                sentences.append({
-                    'id': len(sentences) + 1,
-                    'start': s_start,
-                    'end': len(text),
-                    'text': segment.strip()
-                })
-        sentence_flags = {s['id']: set() for s in sentences}
-        if progress_cb:
-            progress_cb(18, "Checking grammar...")
+        if len(words) > 12 and ',' not in sent_text:
+            if re.search(r"\b(and|but|because|so)\b", sent_text, flags=re.IGNORECASE):
+                sentence_flags.setdefault(sent_id, set()).add('run_on')
+                conj_match = re.search(r"\b(and|but|because|so)\b", sent_text, flags=re.IGNORECASE)
+                if conj_match:
+                    _add_issue(sentence['start'] + conj_match.start(), sentence['start'] + conj_match.end(), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], sentence_id=sent_id)
 
-        for sentence in sentences:
-            if _time_guard():
-                break
-            sent_text = text[sentence['start']:sentence['end']]
-            sent_id = sentence['id']
-            words = list(re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", sent_text))
-            if len(words) < 2:
-                continue
-
-            first_alpha = re.search(r'[A-Za-z]', sent_text)
-            if first_alpha:
-                pos = sentence['start'] + first_alpha.start()
-                if text[pos:pos + 1].islower():
-                    sentence_flags.setdefault(sent_id, set()).add('capitalization')
-                    _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], sentence_id=sent_id)
-
-            stripped = sent_text.rstrip()
-            if stripped and stripped[-1] not in '.!?':
-                end_pos = sentence['start'] + len(stripped)
-                if end_pos > sentence['start']:
-                    sentence_flags.setdefault(sent_id, set()).add('end_punctuation')
-                    _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], sentence_id=sent_id)
-
-            for match in words:
-                word = match.group(0)
+        if re.search(r"\b(a|an)\s+[A-Za-z]", sent_text, flags=re.IGNORECASE):
+            for match in re.finditer(r"\b(a|an)\s+([A-Za-z][\w-]*)", sent_text, flags=re.IGNORECASE):
+                article = match.group(1).lower()
+                word = match.group(2)
                 lower = word.lower()
-                if lower in allowlist_lower and word and word[0].islower():
-                    sentence_flags.setdefault(sent_id, set()).add('proper_noun')
-                    _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Proper noun should be capitalized.', [word.capitalize()], sentence_id=sent_id)
+                vowel = lower[0] in 'aeiou'
+                special_an = lower.startswith(('honest', 'hour', 'heir'))
+                special_a = lower.startswith(('university', 'unicorn', 'user'))
+                if article == 'a' and (vowel or special_an):
+                    _add_issue(sentence['start'] + match.start(1), sentence['start'] + match.start(1) + 1, 'grammar', 'Use "an" before vowel sounds.', ['an'], sentence_id=sent_id)
+                if article == 'an' and (special_a or (not vowel and not special_an)):
+                    _add_issue(sentence['start'] + match.start(1), sentence['start'] + match.start(1) + 2, 'grammar', 'Use "a" before consonant sounds.', ['a'], sentence_id=sent_id)
 
-            if len(words) > 12 and ',' not in sent_text:
-                if re.search(r'\b(and|but|so)\b', sent_text, flags=re.IGNORECASE):
-                    sentence_flags.setdefault(sent_id, set()).add('run_on')
-                    conj_match = re.search(r'\b(and|but|so)\b', sent_text, flags=re.IGNORECASE)
-                    if conj_match:
-                        _add_issue(sentence['start'] + conj_match.start(), sentence['start'] + conj_match.end(), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], sentence_id=sent_id)
+        if re.search(r"\bpeople\s+is\b", sent_text, flags=re.IGNORECASE):
+            match = re.search(r"\bpeople\s+is\b", sent_text, flags=re.IGNORECASE)
+            _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Use "people are" for plural subject.', ['people are'], sentence_id=sent_id)
+
+        if re.search(r"\bresults\s+shows\b", sent_text, flags=re.IGNORECASE):
+            match = re.search(r"\bresults\s+shows\b", sent_text, flags=re.IGNORECASE)
+            _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Use "results show" for plural subject.', ['results show'], sentence_id=sent_id)
+
+        if re.search(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
+            for match in re.finditer(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
+                verb = match.group(2)
+                if not verb.endswith('s') and verb not in {'is', 'was', 'has', 'does'}:
+                    _add_issue(sentence['start'] + match.start(2), sentence['start'] + match.end(2), 'grammar', 'Add -s for third-person singular.', [], sentence_id=sent_id)
+
+    if progress_cb:
+        progress_cb(48, "Checking mechanics...")
 
     for match in re.finditer(r' {2,}', text):
         if _time_guard():
@@ -2201,43 +2329,16 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             break
         _add_issue(match.start(1), match.start(2) + 1, 'grammar', 'Add a space after punctuation.', [])
 
-    def _is_code_like(word):
-        return any(sym in word for sym in ('_', '/', '\\', '::', '->', '=>', '()'))
-
-    if doc is not None:
-        prev_word = None
-        for token in doc:
-            if _time_guard():
-                break
-            if token.is_space or token.is_punct:
-                continue
-            if _overlaps_ignored(token.idx, token.idx + len(token.text)):
-                continue
-            if prev_word and prev_word == token.lower_:
-                _add_issue(token.idx, token.idx + len(token.text), 'style', 'Repeated word.', [])
-            prev_word = token.lower_
-    else:
-        prev_word = None
-        for match in re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", text):
-            if _time_guard():
-                break
-            word = match.group(0)
-            if _overlaps_ignored(match.start(), match.end()):
-                continue
-            lower = word.lower()
-            if prev_word and prev_word == lower:
-                _add_issue(match.start(), match.end(), 'style', 'Repeated word.', [])
-            prev_word = lower
-
     if progress_cb:
         progress_cb(60, "Checking spelling...")
 
     if SpellChecker:
         spell = SpellChecker()
         spell.word_frequency.load_words(list(allowlist_lower))
-        tokens_for_spell = doc if doc is not None else []
-        if doc is None:
-            tokens_for_spell = []
+        tokens_for_spell = []
+        if doc is not None:
+            tokens_for_spell = list(doc)
+        else:
             for match in re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", text):
                 tokens_for_spell.append(match)
         total_tokens = max(1, len(tokens_for_spell))
@@ -2291,7 +2392,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
                 continue
             suggestions = [c for c in candidates if c != lower][:3]
-            _add_issue(start, end, 'spelling', 'Possible spelling mistake.', suggestions)
+            _add_issue(start, end, 'spelling', 'Possible spelling mistake.', suggestions, sentence_id=_sentence_id_for_span(start, end, sentences))
             if progress_cb and idx % 80 == 0:
                 progress_cb(60 + int(15 * idx / total_tokens), "Checking spelling...")
 
@@ -2316,55 +2417,23 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             msg_lower = message.lower()
             if not any(key in msg_lower for key in ('capitalize', 'punctuation', 'comma', 'period', 'a/an', 'article', 'agreement', 'subject')):
                 continue
-            _add_issue(start, end, 'style', message, [])
-
-    def _apply_proper_nouns(sentence_text):
-        updated = sentence_text
-        for lower in allowlist_lower:
-            pattern = re.compile(r'\b' + re.escape(lower) + r'\b', flags=re.IGNORECASE)
-            updated = pattern.sub(lower.capitalize(), updated)
-        return updated
-
-    def _capitalize_first(sentence_text):
-        for idx, ch in enumerate(sentence_text):
-            if ch.isalpha():
-                return sentence_text[:idx] + ch.upper() + sentence_text[idx + 1:]
-        return sentence_text
-
-    def _ensure_end_punct(sentence_text):
-        stripped_sentence = sentence_text.rstrip()
-        if not stripped_sentence:
-            return sentence_text
-        if stripped_sentence[-1] in '.!?':
-            return stripped_sentence
-        return stripped_sentence + '.'
-
-    def _special_rewrite(sentence_text):
-        lower_text = sentence_text.lower()
-        if 'how are you' in lower_text and 'this is' in lower_text:
-            name_match = re.search(r'\bthis is\s+([A-Za-z][\w-]*)', sentence_text, flags=re.IGNORECASE)
-            if name_match:
-                name = name_match.group(1)
-                proper_name = name.capitalize()
-                rest_match = re.search(r'\bhow are you\b.*', sentence_text, flags=re.IGNORECASE)
-                rest = rest_match.group(0) if rest_match else 'How are you?'
-                rest = _capitalize_first(rest.strip())
-                if rest and rest[-1] not in '.!?':
-                    rest = rest + '?'
-                return f"Hi, this is {proper_name}. {rest}"
-        return None
+            _add_issue(start, end, 'style', message, [], sentence_id=_sentence_id_for_span(start, end, sentences))
 
     for sentence in sentences:
         sid = sentence.get('id')
         flags = sentence_flags.get(sid, set())
-        key_flags = {'capitalization', 'end_punctuation', 'proper_noun'}
+        key_flags = {'capitalization', 'end_punctuation', 'proper_noun', 'run_on'}
         if len(flags.intersection(key_flags)) >= 2:
             original = sentence.get('text') or ''
-            suggestion = _special_rewrite(original)
-            if not suggestion:
-                suggestion = _apply_proper_nouns(original)
-                suggestion = _capitalize_first(suggestion.strip())
-                suggestion = _ensure_end_punct(suggestion)
+            suggestion = _apply_rewrite_rules(original)
+            split_suggestion = _split_on_conjunction(suggestion)
+            if split_suggestion:
+                suggestion = split_suggestion
+            suggestion = _with_end_punct(suggestion)
+            templates = _rewrite_templates(original)
+            if templates:
+                for template in templates:
+                    _add_issue(sentence['start'], sentence['end'], 'style', template, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
             if suggestion and suggestion.strip() and suggestion.strip() != original.strip():
                 _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
 
