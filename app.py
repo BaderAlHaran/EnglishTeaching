@@ -1716,6 +1716,7 @@ def _build_result_html(ai_result, highlighted_text):
         return '<p class="form__help">No issues detected.</p>'
     summary = ai_result.get('summary') or {}
     issues = ai_result.get('issues') or []
+    sentences = ai_result.get('sentences') or []
     parts = []
     parts.append('<div class="improve-legend">')
     parts.append(
@@ -1731,9 +1732,49 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>')
     parts.append(f'<div class="improve-highlight">{highlighted_text}</div>')
     parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin: var(--space-6) 0 var(--space-3);">Issues</h4>')
-    if issues:
+    if not issues:
+        parts.append('<p class="form__help">No issues detected.</p>')
+        return ''.join(parts)
+
+    issues_by_sentence = {}
+    general_issues = []
+    for issue in issues:
+        sid = issue.get('sentence_id')
+        if sid is None:
+            general_issues.append(issue)
+        else:
+            issues_by_sentence.setdefault(sid, []).append(issue)
+
+    if sentences:
+        display_idx = 0
+        for sentence in sentences:
+            sentence_issues = issues_by_sentence.get(sentence.get('id'), [])
+            if not sentence_issues:
+                continue
+            display_idx += 1
+            sentence_text = escape(sentence.get('text') or '')
+            parts.append('<div style="margin-top: var(--space-6);">')
+            parts.append(f'<p class="form__help"><strong>Sentence {display_idx}:</strong> {sentence_text}</p>')
+            parts.append('<ul class="improve-issues">')
+            for issue in sentence_issues:
+                kind = escape(issue.get('kind') or 'grammar')
+                message = escape(issue.get('message') or 'Issue detected.')
+                parts.append(f'<li><span class="improve-issues__kind improve-issues__kind-{kind}">{kind.replace("_", " ").title()}</span>')
+                parts.append(f'<span class="improve-issues__message">{message}</span>')
+                suggestions = issue.get('suggestions') or []
+                if suggestions:
+                    safe_suggestions = ", ".join(escape(s) for s in suggestions if s)
+                    if safe_suggestions:
+                        parts.append(f'<span class="improve-issues__suggestions">Suggestions: {safe_suggestions}</span>')
+                parts.append('</li>')
+            parts.append('</ul>')
+            parts.append('</div>')
+
+    if general_issues:
+        parts.append('<div style="margin-top: var(--space-6);">')
+        parts.append('<p class="form__help"><strong>Other notes:</strong></p>')
         parts.append('<ul class="improve-issues">')
-        for issue in issues:
+        for issue in general_issues:
             kind = escape(issue.get('kind') or 'grammar')
             message = escape(issue.get('message') or 'Issue detected.')
             parts.append(f'<li><span class="improve-issues__kind improve-issues__kind-{kind}">{kind.replace("_", " ").title()}</span>')
@@ -1745,8 +1786,7 @@ def _build_result_html(ai_result, highlighted_text):
                     parts.append(f'<span class="improve-issues__suggestions">Suggestions: {safe_suggestions}</span>')
             parts.append('</li>')
         parts.append('</ul>')
-    else:
-        parts.append('<p class="form__help">No issues detected.</p>')
+        parts.append('</div>')
     return ''.join(parts)
 
 def _process_improve_job(job_id, extracted_text, warning):
@@ -1795,6 +1835,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
     if not AI_CHECKER_ENABLED:
         return None, "Writing checker unavailable. Please use Human Review.", None
 
+    text = text or ''
+
     try:
         from spellchecker import SpellChecker
     except Exception as exc:
@@ -1823,63 +1865,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
 
     issues = []
 
-    def _add_issue(start, end, kind, message, suggestions=None):
-        if start is None or end is None:
-            return
-        if start < 0 or end <= start or start > len(text):
-            return
-        issues.append({
-            'start': start,
-            'end': end,
-            'kind': kind,
-            'message': message,
-            'suggestions': suggestions or []
-        })
-
     if progress_cb:
         progress_cb(8, "Preparing checks...")
-
-    lt_issues = []
-    try:
-        import language_tool_python
-        tool = language_tool_python.LanguageTool(LT_LANGUAGE)
-        try:
-            from concurrent.futures import ThreadPoolExecutor, TimeoutError
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(tool.check, text)
-                matches = future.result(timeout=LT_TIMEOUT_SECONDS)
-        except TimeoutError:
-            matches = []
-            warning = "Used basic checker due to resource limits."
-        except Exception as exc:
-            matches = []
-            warning = "Used basic checker due to resource limits."
-            app.logger.info("LanguageTool fallback: %s", exc)
-        finally:
-            try:
-                tool.close()
-            except Exception:
-                pass
-        for match in matches or []:
-            offset = getattr(match, 'offset', None)
-            length = getattr(match, 'errorLength', None)
-            if offset is None or length is None:
-                continue
-            replacements = getattr(match, 'replacements', []) or []
-            suggestions = [r for r in replacements if r][:3]
-            lt_issues.append({
-                'start': offset,
-                'end': offset + length,
-                'kind': 'grammar',
-                'message': getattr(match, 'message', '') or 'Possible grammar issue.',
-                'suggestions': suggestions
-            })
-    except Exception as exc:
-        warning = "Used basic checker due to resource limits."
-        app.logger.info("LanguageTool unavailable: %s", exc)
-        lt_issues = []
-
-    issues.extend(lt_issues)
 
     email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
     url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
@@ -1905,8 +1892,155 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             'end': match.end()
         })
 
+    sentence_bounds = []
+    s_start = 0
+    for m in re.finditer(r'[.!?]+', text):
+        s_end = m.end()
+        sentence_bounds.append((s_start, s_end))
+        s_start = s_end
+    if s_start < len(text):
+        sentence_bounds.append((s_start, len(text)))
+
+    sentences = []
+    for s_start, s_end in sentence_bounds:
+        segment = text[s_start:s_end]
+        if segment.strip():
+            sentences.append({
+                'id': len(sentences) + 1,
+                'start': s_start,
+                'end': s_end,
+                'text': segment.strip()
+            })
+
+    sentence_flags = {s['id']: set() for s in sentences}
+
+    def _sentence_id_for_span(start, end):
+        for s in sentences:
+            if start >= s['start'] and end <= s['end']:
+                return s['id']
+        return None
+
+    def _add_issue(start, end, kind, message, suggestions=None, no_highlight=False, flag=None, sentence_id=None):
+        if start is None or end is None:
+            return
+        if start < 0 or end <= start or start > len(text):
+            return
+        sid = sentence_id if sentence_id is not None else _sentence_id_for_span(start, end)
+        if flag and sid is not None:
+            sentence_flags.setdefault(sid, set()).add(flag)
+        issues.append({
+            'start': start,
+            'end': end,
+            'kind': kind,
+            'message': message,
+            'suggestions': suggestions or [],
+            'sentence_id': sid,
+            'no_highlight': no_highlight
+        })
+
+    def _lt_category_id(match):
+        category = getattr(match, 'category', None)
+        if isinstance(category, dict):
+            cat_id = category.get('id') or category.get('name')
+        else:
+            cat_id = getattr(category, 'id', None) or getattr(category, 'name', None)
+        return str(cat_id).upper() if cat_id else ''
+
+    def _simplify_message(message):
+        msg = (message or '').strip()
+        if not msg:
+            return 'Possible issue.'
+        lower = msg.lower()
+        if 'sentence' in lower and 'capital' in lower:
+            return 'Capitalize the start of the sentence.'
+        if 'capital' in lower:
+            return 'Capitalize this word.'
+        if 'punctuation' in lower or 'period' in lower or 'comma' in lower:
+            return 'Check punctuation in this sentence.'
+        if 'subject-verb' in lower or 'agreement' in lower:
+            return 'Subject and verb may not agree.'
+        if 'a/an' in lower or 'article' in lower:
+            return 'Check article usage (a/an).'
+        if 'confused' in lower or 'homophone' in lower:
+            return 'Check word choice here.'
+        return msg
+
+    def _lt_keep(match):
+        message = (getattr(match, 'message', '') or '').lower()
+        rule_id = (getattr(match, 'ruleId', '') or getattr(match, 'rule_id', '') or '').upper()
+        category = _lt_category_id(match)
+        if category in {'CASING', 'PUNCTUATION', 'TYPOGRAPHY', 'CONFUSED_WORDS'}:
+            return True
+        if 'SVA' in rule_id or 'SUBJECT_VERB' in rule_id:
+            return True
+        if category == 'GRAMMAR':
+            if any(key in message for key in ('subject', 'verb', 'agreement', 'a/an', 'article', 'there is', 'there are')):
+                return True
+        if any(key in message for key in ('capital', 'punctuation', 'comma', 'period', 'apostrophe', 'sentence start')):
+            return True
+        return False
+
     if progress_cb:
-        progress_cb(20, "Checking spelling...")
+        progress_cb(12, "Checking grammar...")
+
+    lt_used = False
+    try:
+        import language_tool_python
+    except Exception as exc:
+        warning = "Used basic checker due to resource limits."
+        app.logger.info("LanguageTool unavailable: %s", exc)
+    else:
+        tool = language_tool_python.LanguageTool(LT_LANGUAGE)
+        matches = []
+        try:
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(tool.check, text)
+                matches = future.result(timeout=LT_TIMEOUT_SECONDS)
+            lt_used = True
+        except TimeoutError:
+            warning = "Used basic checker due to resource limits."
+        except Exception as exc:
+            warning = "Used basic checker due to resource limits."
+            app.logger.info("LanguageTool fallback: %s", exc)
+        finally:
+            try:
+                tool.close()
+            except Exception:
+                pass
+        for match in matches or []:
+            if not _lt_keep(match):
+                continue
+            offset = getattr(match, 'offset', None)
+            length = getattr(match, 'errorLength', None)
+            if offset is None or length is None:
+                continue
+            replacements = getattr(match, 'replacements', []) or []
+            suggestions = [r for r in replacements if r][:3]
+            message = _simplify_message(getattr(match, 'message', '') or '')
+            _add_issue(offset, offset + length, 'grammar', message, suggestions)
+
+    if not lt_used and proselint_lint:
+        try:
+            style_hits = proselint_lint(text) or []
+        except Exception:
+            style_hits = []
+        for hit in style_hits:
+            if not isinstance(hit, dict):
+                continue
+            start = hit.get('start')
+            end = hit.get('end')
+            message = (hit.get('message') or '').strip()
+            if start is None or end is None or not message:
+                continue
+            if not any(key in message.lower() for key in ('capital', 'punctuation', 'comma', 'period', 'a/an', 'article')):
+                continue
+            _add_issue(start, end, 'style', _simplify_message(message), [])
+    elif not lt_used and proselint_error and not warning:
+        warning = "Used basic checker due to resource limits."
+
+    if progress_cb:
+        progress_cb(24, "Checking spelling...")
 
     spell = SpellChecker()
     allowlist_lower = {w.lower() for w in SPELLING_ALLOWLIST}
@@ -1921,6 +2055,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             continue
         if len(clean) < 3:
             continue
+        if clean.isupper() and len(clean) > 1:
+            continue
         if any(ch.isdigit() for ch in clean):
             continue
         token_core = re.sub(r"['-]", "", clean)
@@ -1928,6 +2064,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             continue
         lower = str(clean.lower())
         if lower in allowlist_lower:
+            continue
+        if clean[0].isupper():
             continue
         try:
             unknown = lower in spell.unknown([lower])
@@ -1952,45 +2090,13 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         if unknown:
             _add_issue(token['start'], token['end'], 'spelling', 'Possible spelling mistake.', suggestions)
         if progress_cb and idx % 60 == 0:
-            progress_cb(20 + int(15 * idx / total_tokens), "Checking spelling...")
+            progress_cb(24 + int(12 * idx / total_tokens), "Checking spelling...")
 
     if _timed_out():
         return None, "Analysis timed out. Please try a shorter section.", warning
     if progress_cb:
-        progress_cb(38, "Checking style...")
+        progress_cb(40, "Checking core rules...")
 
-    if proselint_lint:
-        try:
-            style_hits = proselint_lint(text) or []
-        except Exception:
-            style_hits = []
-    else:
-        style_hits = []
-        if not warning:
-            warning = "Used basic checker due to resource limits."
-    for hit in style_hits:
-        if not isinstance(hit, dict):
-            continue
-        start = hit.get('start')
-        end = hit.get('end')
-        if start is None or end is None:
-            continue
-        message = hit.get('message') or 'Style issue.'
-        _add_issue(start, end, 'style', message, [])
-
-    if proselint_error and not warning:
-        warning = "Used basic checker due to resource limits."
-
-    if _timed_out():
-        return None, "Analysis timed out. Please try a shorter section.", warning
-    if progress_cb:
-        progress_cb(50, "Checking grammar rules...")
-
-    uncountable = {
-        'research', 'information', 'evidence', 'advice', 'equipment', 'data', 'homework',
-        'furniture', 'news', 'feedback', 'software', 'knowledge', 'progress', 'literature',
-        'music', 'water', 'money', 'traffic', 'bread', 'rice', 'weather', 'work'
-    }
     plural_exceptions = {
         'news', 'physics', 'mathematics', 'economics', 'politics', 'ethics', 'linguistics',
         'series', 'species', 'means', 'analysis', 'thesis', 'crisis', 'basis', 'hypothesis'
@@ -2003,18 +2109,10 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         'he', 'she', 'it', 'this', 'that', 'each', 'everyone', 'everybody',
         'someone', 'somebody', 'anyone', 'anybody', 'nobody', 'noone'
     }
-    determiners = {'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
     quantifiers = {'many', 'several', 'few', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'}
-    adjectives = {
-        'good', 'bad', 'important', 'significant', 'interesting', 'useful', 'strong', 'weak',
-        'major', 'minor', 'effective', 'key', 'main', 'simple', 'complex', 'basic', 'clear',
-        'poor', 'critical', 'great', 'valuable'
-    }
-    count_nouns = {
+    common_nouns = {
         'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
-        'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay'
-    }
-    common_nouns = count_nouns | {
+        'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
         'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
     }
     comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
@@ -2039,6 +2137,12 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             return verb + 'es'
         return verb + 's'
 
+    tokens_by_sentence = {s['id']: [] for s in sentences}
+    for token in tokens:
+        sid = _sentence_id_for_span(token['start'], token['end'])
+        if sid is not None:
+            tokens_by_sentence[sid].append(token)
+
     for i, token in enumerate(tokens):
         if _timed_out():
             return None, "Analysis timed out. Please try a shorter section.", warning
@@ -2049,17 +2153,12 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         prev2_tok = tokens[i - 2] if i > 1 else None
 
         if lower in proper_lower and token['text'] != proper_lower[lower]:
-            _add_issue(token['start'], token['end'], 'grammar', 'Proper noun should be capitalized.', [proper_lower[lower]])
+            _add_issue(token['start'], token['end'], 'grammar', 'Proper noun should be capitalized.', [proper_lower[lower]], flag='proper_noun')
 
         if next_tok and next_tok['lower'] in {'is', 'was'}:
             if lower in plural_subjects or _is_plural(lower):
                 suggestion = 'are' if next_tok['lower'] == 'is' else 'were'
-                message = 'Plural subject with singular verb.'
-                suggestions = [suggestion]
-                if lower == 'data':
-                    message = 'Data is often treated as plural in academic writing.'
-                    suggestions = ['are', 'is (context)']
-                _add_issue(next_tok['start'], next_tok['end'], 'grammar', message, suggestions)
+                _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Plural subject with singular verb.', [suggestion])
 
         if lower in singular_subjects and next_tok and next_tok['lower'] in {'are', 'were'}:
             suggestion = 'is' if next_tok['lower'] == 'are' else 'was'
@@ -2067,31 +2166,10 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
 
         if lower == 'there' and next_tok and next_tok['lower'] == 'is' and next2_tok:
             q = next2_tok['lower']
-            if q in quantifiers or (q.isdigit() and int(q) > 1):
+            if q in quantifiers or _is_plural(q):
                 _add_issue(next_tok['start'], next_tok['end'], 'grammar', "Use 'there are' with plural quantities.", ['are'])
 
-        if lower in {'these', 'those'} and next_tok:
-            if not _is_plural(next_tok['lower']) and next_tok['lower'] not in uncountable:
-                _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'These/those should modify a plural noun.', [])
-
-        if lower in {'this', 'that'} and next_tok:
-            if _is_plural(next_tok['lower']):
-                suggestion = 'these' if lower == 'this' else 'those'
-                _add_issue(token['start'], token['end'], 'grammar', 'This/that should modify a singular noun.', [suggestion])
-
-        if lower == 'did' and next_tok and next_tok['lower'] == 'went':
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use base form after "did".', ['go'])
-
-        if lower in {'has', 'have'} and next_tok and next_tok['lower'] == 'went':
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use past participle after "has/have".', ['gone'])
-
-        if lower in {'has', 'have'} and next_tok and next_tok['lower'] == 'ate':
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use past participle after "has/have".', ['eaten'])
-
-        if lower == 'was' and next_tok and next_tok['lower'] in {'occured', 'occurred'}:
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use "occurred" without "was".', ['occurred'])
-
-        if lower in {'he', 'she', 'it', 'this', 'that'} and next_tok:
+        if lower in {'he', 'she', 'it'} and next_tok:
             verb = next_tok['lower']
             if verb in verbs_3rd and not verb.endswith('s'):
                 _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Missing -s for third-person singular.', [_third_person(verb)])
@@ -2105,32 +2183,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 if lower == 'an' and not starts_vowel:
                     _add_issue(token['start'], token['end'], 'grammar', "Use 'a' before consonant sounds.", ['a'])
 
-        if lower in {'is', 'was'} and next_tok:
-            if next_tok['lower'] in count_nouns:
-                _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Missing article before singular noun.', ['a', 'an'])
-            if next2_tok and next_tok['lower'] in adjectives and next2_tok['lower'] in count_nouns:
-                _add_issue(next2_tok['start'], next2_tok['end'], 'grammar', 'Missing article before singular noun.', ['a', 'an'])
-
-        if lower == 'a' and next_tok and next_tok['lower'] in uncountable:
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Uncountable noun should not use "a".', ['some', 'remove "a"'])
-
-        if lower in determiners and next_tok and next_tok['lower'] in determiners:
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Double determiner.', ['remove one'])
-
-        if lower == 'many' and next_tok and next_tok['lower'] in uncountable:
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use "much" with uncountable nouns.', ['much'])
-
-        if lower == 'much' and next_tok and _is_plural(next_tok['lower']):
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use "many" with plural nouns.', ['many'])
-
-        if lower == 'less' and next_tok and _is_plural(next_tok['lower']):
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use "fewer" with plural nouns.', ['fewer'])
-
-        if lower == 'fewer' and next_tok and next_tok['lower'] in uncountable:
-            _add_issue(next_tok['start'], next_tok['end'], 'grammar', 'Use "less" with uncountable nouns.', ['less'])
-
         if lower == 'your' and next_tok and next_tok['lower'] in {'are', 'were'}:
-            _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "you\'re"?', ["you're"])
+            _add_issue(token['start'], token['end'], 'grammar', "Did you mean \"you're\"?", ["you're"])
 
         if lower == "you're" and next_tok and next_tok['lower'] in common_nouns:
             _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "your"?', ['your'])
@@ -2145,7 +2199,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "their"?', ['their'])
 
         if lower == 'its' and next_tok and next_tok['lower'] in {'is', 'was', 'has'}:
-            _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "it\'s"?', ["it's"])
+            _add_issue(token['start'], token['end'], 'grammar', "Did you mean \"it's\"?", ["it's"])
 
         if lower == "it's" and next_tok and next_tok['lower'] in common_nouns:
             _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "its"?', ['its'])
@@ -2174,73 +2228,84 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             if modal_prev or (next_tok and next_tok['lower'] in lose_objects):
                 _add_issue(token['start'], token['end'], 'grammar', 'Did you mean "lose"?', ['lose'])
 
-        if lower in proper_lower and next_tok and next_tok['lower'] == 'how':
-            next3 = tokens[i + 1:i + 4]
-            phrase = " ".join(t['lower'] for t in next3)
-            if phrase.startswith('how are you'):
-                _add_issue(next_tok['start'], next_tok['end'], 'style', 'Consider adding a period after the name.', ['.'])
-
         if progress_cb and i % 90 == 0:
-            progress_cb(50 + int(20 * i / max(1, len(tokens))), "Checking grammar rules...")
+            progress_cb(40 + int(20 * i / max(1, len(tokens))), "Checking core rules...")
 
-    if _timed_out():
-        return None, "Analysis timed out. Please try a shorter section.", warning
+    for sentence in sentences:
+        sentence_tokens = tokens_by_sentence.get(sentence['id'], [])
+        if not sentence_tokens:
+            continue
+        if len(sentence_tokens) > 1:
+            first_token = sentence_tokens[0]
+            if first_token['text'] and first_token['text'][0].islower():
+                _add_issue(first_token['start'], first_token['start'] + 1, 'grammar', 'Capitalize the start of the sentence.', [], flag='capitalization', sentence_id=sentence['id'])
 
-    for match in re.finditer(r' {2,}', text):
-        _add_issue(match.start(), match.end(), 'grammar', 'Extra spaces.', ['Use a single space.'])
+        raw_sentence = text[sentence['start']:sentence['end']]
+        stripped = raw_sentence.rstrip()
+        if len(sentence_tokens) > 2 and stripped and stripped[-1] not in '.!?':
+            end_pos = sentence['start'] + len(stripped)
+            if end_pos > sentence['start']:
+                _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], flag='end_punctuation', sentence_id=sentence['id'])
 
-    for match in re.finditer(r'\s+([,.;:!?])', text):
-        _add_issue(match.start(), match.end(), 'grammar', 'Remove space before punctuation.', [])
-
-    for match in re.finditer(r'([,.;:!?])([A-Za-z])', text):
-        _add_issue(match.start(1), match.start(2) + 1, 'grammar', 'Add a space after punctuation.', [])
-
-    for match in re.finditer(r'[.!?]\s+[a-z]', text):
-        start = match.start() + 2
-        _add_issue(start, start + 1, 'grammar', 'Sentence should start with a capital letter.', [])
-
-    stripped = text.strip()
-    if stripped:
-        first_non_space = len(text) - len(text.lstrip())
-        if text[first_non_space].islower():
-            _add_issue(first_non_space, first_non_space + 1, 'grammar', 'Sentence should start with a capital letter.', [])
-        word_count = len(tokens)
-        last_char = stripped[-1]
-        if word_count >= 6 and last_char not in '.!?':
-            end_pos = len(text.rstrip())
-            _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'])
-
-    for match in re.finditer(r'\b([A-Za-z]+)(\s+)\1\b', text, flags=re.IGNORECASE):
-        word = match.group(1)
-        second_start = match.start(2) + len(match.group(2))
-        _add_issue(second_start, second_start + len(word), 'style', 'Repeated word.', [])
-
-    for match in re.finditer(r'[!?]{2,}', text):
-        _add_issue(match.start(), match.end(), 'style', 'Excessive punctuation for academic tone.', ['Use a single mark.'])
-
-    sentence_bounds = []
-    s_start = 0
-    for m in re.finditer(r'[.!?]', text):
-        s_end = m.end()
-        sentence_bounds.append((s_start, s_end))
-        s_start = s_end
-    if s_start < len(text):
-        sentence_bounds.append((s_start, len(text)))
-
-    for s_start, s_end in sentence_bounds:
-        sentence_tokens = [t for t in tokens if t['start'] >= s_start and t['end'] <= s_end]
-        if len(sentence_tokens) > 30:
-            _add_issue(s_start, s_end, 'style', 'Sentence is very long; consider splitting it.', [])
         for idx, tok in enumerate(sentence_tokens):
             if tok['lower'] in {'and', 'but', 'so'}:
                 left = idx
                 right = len(sentence_tokens) - idx - 1
-                if left > 6 and right > 6:
+                if left >= 6 and right >= 6:
                     prev_tok = sentence_tokens[idx - 1] if idx > 0 else None
                     if prev_tok:
                         between = text[prev_tok['end']:tok['start']]
                         if ',' not in between:
-                            _add_issue(tok['start'], tok['end'], 'style', 'Consider adding a comma before the conjunction or splitting the sentence.', [])
+                            _add_issue(tok['start'], tok['end'], 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], flag='run_on', sentence_id=sentence['id'])
+
+    def _apply_proper_nouns(sentence_text):
+        updated = sentence_text
+        for lower, proper in proper_lower.items():
+            pattern = re.compile(r'\b' + re.escape(lower) + r'\b', flags=re.IGNORECASE)
+            updated = pattern.sub(proper, updated)
+        return updated
+
+    def _capitalize_first(sentence_text):
+        for idx, ch in enumerate(sentence_text):
+            if ch.isalpha():
+                return sentence_text[:idx] + ch.upper() + sentence_text[idx + 1:]
+        return sentence_text
+
+    def _ensure_end_punct(sentence_text):
+        stripped_sentence = sentence_text.rstrip()
+        if not stripped_sentence:
+            return sentence_text
+        if stripped_sentence[-1] in '.!?':
+            return stripped_sentence
+        return stripped_sentence + '.'
+
+    def _special_rewrite(sentence_text):
+        lower_text = sentence_text.lower()
+        if 'how are you' in lower_text:
+            name_match = re.search(r'\bthis is\s+([A-Za-z][\w-]*)', sentence_text, flags=re.IGNORECASE)
+            if name_match:
+                name = name_match.group(1)
+                proper_name = proper_lower.get(name.lower(), name.capitalize())
+                rest_match = re.search(r'\bhow are you\b.*', sentence_text, flags=re.IGNORECASE)
+                rest = rest_match.group(0) if rest_match else 'How are you?'
+                rest = _capitalize_first(rest.strip())
+                if rest and rest[-1] not in '.!?':
+                    rest = rest + '?'
+                return f"Hi, this is {proper_name}. {rest}"
+        return None
+
+    for sentence in sentences:
+        flags = sentence_flags.get(sentence['id'], set())
+        key_flags = {'capitalization', 'end_punctuation', 'proper_noun'}
+        if len(flags.intersection(key_flags)) >= 2:
+            original = sentence.get('text') or ''
+            suggestion = _special_rewrite(original)
+            if not suggestion:
+                suggestion = _apply_proper_nouns(original)
+                suggestion = _capitalize_first(suggestion.strip())
+                suggestion = _ensure_end_punct(suggestion)
+            if suggestion and suggestion.strip() and suggestion.strip() != original.strip():
+                _add_issue(sentence['start'], sentence['end'], 'style', f"Suggested rewrite: {suggestion}", [], no_highlight=True, sentence_id=sentence['id'])
 
     def _dedupe_issues(items):
         seen = set()
@@ -2249,6 +2314,10 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         for item in sorted(items, key=lambda i: (i['start'], -(i['end'] - i['start']))):
             key = (item['start'], item['end'], item['kind'], item['message'])
             if key in seen:
+                continue
+            if item.get('no_highlight'):
+                seen.add(key)
+                result.append(item)
                 continue
             if item['start'] < last_end:
                 continue
@@ -2263,11 +2332,12 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         progress_cb(95, "Finalizing...")
 
     summary = {
-        'spelling': sum(1 for i in issues if i['kind'] == 'spelling'),
-        'grammar': sum(1 for i in issues if i['kind'] == 'grammar'),
-        'style': sum(1 for i in issues if i['kind'] == 'style')
+        'spelling': sum(1 for i in issues if i['kind'] == 'spelling' and not i.get('no_highlight')),
+        'grammar': sum(1 for i in issues if i['kind'] == 'grammar' and not i.get('no_highlight')),
+        'style': sum(1 for i in issues if i['kind'] == 'style' and not i.get('no_highlight'))
     }
-    return {'issues': issues, 'summary': summary}, None, warning
+    return {'issues': issues, 'summary': summary, 'sentences': sentences}, None, warning
+
 def _build_highlighted_html(text, issues):
     if not issues:
         return Markup(escape(text))
@@ -2278,6 +2348,8 @@ def _build_highlighted_html(text, issues):
 
     sorted_issues = sorted(issues, key=lambda i: (i.get('start', 0), -_issue_length(i)))
     for issue in sorted_issues:
+        if issue.get('no_highlight'):
+            continue
         start = issue.get('start', 0) or 0
         end = issue.get('end', 0) or 0
         if start < last_index or end <= start or start > len(text):
