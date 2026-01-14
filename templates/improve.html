@@ -252,7 +252,7 @@
 
             <div class="improve-grid">
                 <div class="improve-card">
-                    <h3 class="improve-card__title">Option 1: AI Check (Optional)</h3>
+                    <h3 class="improve-card__title">AI Check</h3>
                     <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. If a file is uploaded, it will be used instead of pasted text.</p>
                     <form action="/improve/ai" method="post" enctype="multipart/form-data">
                         <div class="form__group">
@@ -299,23 +299,6 @@
                         </form>
                     </div>
                     {% endif %}
-                </div>
-
-                <div class="improve-card">
-                    <h3 class="improve-card__title">Option 2: Human Review Only (No AI)</h3>
-                    <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. Your submission goes straight to a human reviewer.</p>
-                    <form action="/improve/human" method="post" enctype="multipart/form-data">
-                        <div class="form__group">
-                            <label class="form__label" for="human-text">Paste your text</label>
-                            <textarea class="form__textarea" id="human-text" name="text" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
-                        </div>
-                        <div class="form__group">
-                            <label class="form__label" for="human-file">Or upload a file (.pdf, .docx)</label>
-                            <input class="improve-file" id="human-file" type="file" name="file" accept=".pdf,.docx">
-                            <span class="form__help">Maximum file size: 10MB.</span>
-                        </div>
-                        <button class="btn btn--primary" type="submit">Send to Human Review</button>
-                    </form>
                 </div>
             </div>
         </div>
