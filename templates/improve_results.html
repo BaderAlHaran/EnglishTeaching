@@ -169,7 +169,7 @@
 
                 <form action="/improve/human" method="post" style="margin-top: var(--space-6);">
                     <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
-                    <textarea class="improve-hidden" name="ai_results_json">{{ ai_result|tojson|e }}</textarea>
+                    <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|default('', true)|e }}</textarea>
                     <div class="improve-actions">
                         <button class="btn btn--primary" type="submit">Send to Human for Correction</button>
                         <a href="/improve" class="btn btn--secondary">Start Over</a>

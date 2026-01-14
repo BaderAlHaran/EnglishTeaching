@@ -2422,6 +2422,7 @@ def improve_result(job_id):
     return render_template(
         'improve_results.html',
         result_html=result_html,
+        ai_results_json=result_html,
         extracted_text=extracted_text or '',
         warning=warning
     )
