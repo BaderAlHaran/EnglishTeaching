@@ -1557,9 +1557,9 @@ def _run_local_analysis(text):
         return None, "Spelling checker is unavailable. Please install pyspellchecker."
 
     try:
-        from write_good import write_good
+        from proselint.tools import lint as proselint_lint
     except Exception:
-        return None, "Style checker is unavailable. Please install write-good."
+        return None, "Style checker is unavailable. Please install proselint."
 
     try:
         from wordfreq import zipf_frequency
@@ -1613,18 +1613,17 @@ def _run_local_analysis(text):
             })
 
     try:
-        style_hits = write_good(text)
+        style_hits = proselint_lint(text) or []
     except Exception:
         style_hits = []
     for hit in style_hits:
-        start = hit.get('index') if isinstance(hit, dict) else None
-        length = hit.get('offset') if isinstance(hit, dict) else None
-        if start is None or length is None:
+        if not isinstance(hit, dict):
             continue
-        end = start + length
-        message = hit.get('reason') if isinstance(hit, dict) else None
-        if not message:
-            message = 'Style issue.'
+        start = hit.get('start')
+        end = hit.get('end')
+        if start is None or end is None:
+            continue
+        message = hit.get('message') or 'Style issue.'
         issues.append({
             'start': start,
             'end': end,
