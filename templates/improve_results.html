@@ -19,7 +19,8 @@
     <style>
         .improve-hero {
             padding: calc(70px + var(--space-24)) 0 var(--space-12);
-            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            background: radial-gradient(circle at top, rgba(39, 174, 96, 0.08), transparent 45%),
+                linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
             text-align: center;
         }
         .improve-hero__title {
@@ -39,6 +40,62 @@
             padding: var(--space-10);
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--gray-200);
+        }
+        .improve-workspace {
+            display: grid;
+            gap: var(--space-8);
+        }
+        .improve-overview {
+            display: grid;
+            grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+            gap: var(--space-6);
+            align-items: stretch;
+        }
+        .improve-score-card {
+            background: linear-gradient(135deg, #e8f7ef 0%, #ffffff 70%);
+            border: 1px solid #c7f0d8;
+            border-radius: var(--radius-2xl);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+        }
+        .improve-score {
+            font-family: var(--font-primary);
+            font-size: var(--fs-5xl);
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .improve-score-label {
+            margin-top: var(--space-2);
+            font-size: var(--fs-xs);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .improve-score-meta {
+            margin-top: var(--space-2);
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+        }
+        .improve-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: var(--space-3);
+        }
+        .improve-stat {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            border: 1px solid var(--gray-200);
+            box-shadow: var(--shadow-sm);
+        }
+        .improve-stat__value {
+            font-size: var(--fs-xl);
+            font-weight: 700;
+        }
+        .improve-stat__label {
+            margin-top: var(--space-1);
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
         }
         .improve-legend {
             display: flex;
@@ -61,64 +118,220 @@
             border-radius: 4px;
             display: inline-block;
         }
+        .improve-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr);
+            gap: var(--space-8);
+            align-items: start;
+        }
+        .improve-document-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-8);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-document__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--space-4);
+            margin-bottom: var(--space-4);
+            flex-wrap: wrap;
+        }
+        .improve-document__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-2xl);
+            font-weight: 600;
+        }
+        .improve-document__meta {
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+        }
+        .improve-copy {
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            border: 1px solid var(--gray-300);
+            background: var(--gray-100);
+            font-weight: 600;
+            transition: all var(--transition-fast);
+        }
+        .improve-copy:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
         .improve-highlight {
             border: 1px solid var(--gray-200);
             border-radius: var(--radius-lg);
             padding: var(--space-5);
-            background: var(--white);
+            background: var(--gray-100);
             white-space: pre-wrap;
             word-break: break-word;
-            line-height: 1.7;
+            line-height: 1.8;
+        }
+        .improve-highlight [data-issue-id] {
+            cursor: pointer;
+            padding: 0 2px;
+            border-radius: 4px;
+            transition: background var(--transition-fast);
         }
         .improve-issue-spelling {
-            text-decoration: underline;
-            text-decoration-color: #dc2626;
-            text-decoration-thickness: 2px;
+            background: rgba(220, 38, 38, 0.12);
+            border-bottom: 2px solid #dc2626;
         }
         .improve-issue-grammar {
-            text-decoration: underline;
-            text-decoration-color: #f59e0b;
-            text-decoration-thickness: 2px;
+            background: rgba(245, 158, 11, 0.15);
+            border-bottom: 2px solid #f59e0b;
         }
         .improve-issue-style {
-            text-decoration: underline;
-            text-decoration-color: #2563eb;
-            text-decoration-thickness: 2px;
+            background: rgba(37, 99, 235, 0.12);
+            border-bottom: 2px solid #2563eb;
         }
-        .improve-issues {
-            margin-top: var(--space-6);
+        .improve-highlight [data-issue-id].is-active {
+            background: rgba(39, 174, 96, 0.2);
+            border-bottom-color: var(--accent-color);
+        }
+        .improve-sidebar {
+            display: grid;
+            gap: var(--space-6);
+            position: sticky;
+            top: 90px;
+        }
+        .improve-sidebar__section {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-5);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-filter {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2);
+            margin-bottom: var(--space-4);
+        }
+        .improve-filter__btn {
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-full);
+            border: 1px solid var(--gray-300);
+            background: var(--gray-100);
+            font-size: var(--fs-sm);
+            font-weight: 600;
+            transition: all var(--transition-fast);
+        }
+        .improve-filter__btn span {
+            margin-left: var(--space-2);
+            color: var(--text-secondary);
+        }
+        .improve-filter__btn.is-active {
+            background: var(--text-primary);
+            border-color: var(--text-primary);
+            color: var(--white);
+        }
+        .improve-filter__btn.is-active span {
+            color: var(--white);
+        }
+        .improve-issues-list {
             display: grid;
             gap: var(--space-3);
+            max-height: 55vh;
+            overflow-y: auto;
+            padding-right: var(--space-2);
         }
-        .improve-issues li {
-            background: var(--gray-100);
-            border-radius: var(--radius-md);
+        .improve-issue-card {
+            width: 100%;
+            text-align: left;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-left: 4px solid var(--gray-300);
+            border-radius: var(--radius-lg);
             padding: var(--space-3) var(--space-4);
+            box-shadow: var(--shadow-sm);
+            transition: all var(--transition-fast);
         }
-        .improve-issues__kind {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-2);
-            font-weight: 600;
-            margin-right: var(--space-2);
+        .improve-issue-card:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
         }
-        .improve-issues__kind-spelling { color: #b91c1c; }
-        .improve-issues__kind-grammar { color: #b45309; }
-        .improve-issues__kind-style { color: #1d4ed8; }
-        .improve-issues__suggestions {
-            display: block;
+        .improve-issue-card.is-active {
+            border-color: var(--text-primary);
+        }
+        .improve-issue-card--grammar { border-left-color: #f59e0b; }
+        .improve-issue-card--spelling { border-left-color: #dc2626; }
+        .improve-issue-card--style { border-left-color: #2563eb; }
+        .improve-issue-card--rewrite { border-left-color: #0ea5e9; }
+        .improve-issue-card__kind {
+            font-size: var(--fs-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
             color: var(--text-secondary);
-            margin-top: var(--space-2);
-            font-size: var(--fs-sm);
+            margin-bottom: var(--space-1);
         }
-        .improve-rewrite {
-            margin: var(--space-3) 0;
-            padding: var(--space-3) var(--space-4);
-            border-radius: var(--radius-md);
-            background: #ecfeff;
-            border: 1px solid #a5f3fc;
-            color: #0e7490;
+        .improve-issue-card__message {
             font-weight: 600;
+            margin-bottom: var(--space-1);
+        }
+        .improve-issue-card__suggestion {
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+        }
+        .improve-detail {
+            background: var(--gray-100);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-5);
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-detail__title {
+            font-size: var(--fs-lg);
+            font-weight: 700;
+        }
+        .improve-detail__message {
+            margin-top: var(--space-2);
+            color: var(--text-secondary);
+        }
+        .improve-detail__suggestions {
+            margin-top: var(--space-4);
+            display: grid;
+            gap: var(--space-2);
+        }
+        .improve-suggestion {
+            text-align: left;
+            background: var(--white);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--gray-200);
+            padding: var(--space-2) var(--space-3);
+            font-weight: 600;
+            transition: all var(--transition-fast);
+        }
+        .improve-suggestion:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+        .improve-detail__actions {
+            margin-top: var(--space-4);
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+        }
+        .improve-action {
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        .improve-action--apply {
+            background: var(--accent-color);
+            color: var(--white);
+        }
+        .improve-action--ignore {
+            background: var(--white);
+            border-color: var(--gray-300);
+            color: var(--text-primary);
+        }
+        .improve-detail__empty {
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
         }
         .improve-alert {
             margin-bottom: var(--space-6);
@@ -136,6 +349,25 @@
             flex-wrap: wrap;
         }
         .improve-hidden { display: none; }
+        @media (max-width: 1000px) {
+            .improve-layout {
+                grid-template-columns: 1fr;
+            }
+            .improve-sidebar {
+                position: static;
+            }
+            .improve-issues-list {
+                max-height: none;
+            }
+        }
+        @media (max-width: 768px) {
+            .improve-overview {
+                grid-template-columns: 1fr;
+            }
+            .improve-document-card {
+                padding: var(--space-6);
+            }
+        }
     </style>
 </head>
 <body>
@@ -161,7 +393,7 @@
     <section class="improve-hero">
         <div class="container">
             <h2 class="improve-hero__title">Improve Your Writing Results</h2>
-            <p class="section__description">Here is your writing feedback summary.</p>
+            <p class="section__description">Review highlights, apply suggestions, and refine your draft.</p>
         </div>
     </section>
 
@@ -223,6 +455,9 @@
         </div>
     </footer>
 
+    {% if ai_results_json %}
+    <script type="application/json" id="improve-data">{{ ai_results_json|safe }}</script>
+    {% endif %}
     <script src="/script.js" defer></script>
 </body>
 </html>

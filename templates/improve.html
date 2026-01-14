@@ -53,8 +53,9 @@
         }
         .improve-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
             gap: var(--space-10);
+            align-items: start;
         }
         .improve-card {
             background: var(--white);
@@ -62,6 +63,10 @@
             padding: var(--space-10);
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--gray-200);
+        }
+        .improve-card--soft {
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
         }
         .improve-card__title {
             font-family: var(--font-primary);
@@ -72,6 +77,65 @@
         .improve-card__subtitle {
             color: var(--text-secondary);
             margin-bottom: var(--space-6);
+        }
+        .improve-editor__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+            flex-wrap: wrap;
+        }
+        .improve-editor__meta {
+            display: flex;
+            gap: var(--space-3);
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+            align-items: center;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-full);
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-editor__meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+        .improve-side {
+            display: grid;
+            gap: var(--space-4);
+        }
+        .improve-side__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-xl);
+            margin-bottom: var(--space-3);
+        }
+        .improve-checklist,
+        .improve-steps {
+            display: grid;
+            gap: var(--space-2);
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+        }
+        .improve-checklist li,
+        .improve-steps li {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-2);
+        }
+        .improve-checklist li::before,
+        .improve-steps li::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            margin-top: 6px;
+        }
+        .improve-tip {
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
         }
         .improve-alert {
             margin: 0 auto var(--space-6);
@@ -195,6 +259,11 @@
         @media (max-width: 768px) {
             .improve-hero__title { font-size: var(--fs-4xl); }
         }
+        @media (max-width: 960px) {
+            .improve-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -249,12 +318,20 @@
 
             <div class="improve-grid">
                 <div class="improve-card">
-                    <h3 class="improve-card__title">Writing Checker</h3>
-                    <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. If a file is uploaded, it will be used instead of pasted text.</p>
+                    <div class="improve-editor__header">
+                        <div>
+                            <h3 class="improve-card__title">Writing Checker</h3>
+                            <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. If a file is uploaded, it will be used instead of pasted text.</p>
+                        </div>
+                        <div class="improve-editor__meta">
+                            <span data-improve-word-count>0 words</span>
+                            <span data-improve-char-count>0 / {{ max_chars|default(10000, true) }} chars</span>
+                        </div>
+                    </div>
                     <form action="/improve/ai" method="post" enctype="multipart/form-data">
                         <div class="form__group">
                             <label class="form__label" for="ai-text">Paste your text</label>
-                            <textarea class="form__textarea" id="ai-text" name="text" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
+                            <textarea class="form__textarea" id="ai-text" name="text" data-improve-input data-max-chars="{{ max_chars|default(10000, true) }}" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
                         </div>
                         <div class="form__group">
                             <label class="form__label" for="ai-file">Or upload a file (.pdf, .docx)</label>
@@ -296,6 +373,30 @@
                         </form>
                     </div>
                     {% endif %}
+                </div>
+                <div class="improve-side">
+                    <div class="improve-card improve-card--soft">
+                        <h4 class="improve-side__title">What we check</h4>
+                        <ul class="improve-checklist">
+                            <li>Grammar, sentence structure, and agreement</li>
+                            <li>Spelling and common word mix-ups</li>
+                            <li>Style clarity and flow improvements</li>
+                            <li>Optional rewrite suggestions</li>
+                        </ul>
+                    </div>
+                    <div class="improve-card improve-card--soft">
+                        <h4 class="improve-side__title">How it works</h4>
+                        <ul class="improve-steps">
+                            <li>Paste your text or upload a document</li>
+                            <li>Automatic analysis runs in seconds</li>
+                            <li>Review highlights and apply fixes</li>
+                        </ul>
+                    </div>
+                    <div class="improve-card improve-card--soft">
+                        <h4 class="improve-side__title">Good to know</h4>
+                        <p class="improve-tip">Maximum length: {{ max_chars|default(10000, true) }} characters.</p>
+                        <p class="improve-tip">Need expert help? Send your draft for human correction after the check.</p>
+                    </div>
                 </div>
             </div>
         </div>

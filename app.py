@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 import re
 import logging
 import resend
+import math
 from urllib.parse import urlparse
 import threading
 from markupsafe import escape, Markup
@@ -1579,6 +1580,7 @@ def _ensure_improve_jobs_table():
                     progress INTEGER DEFAULT 0,
                     message TEXT,
                     result_html TEXT,
+                    result_json TEXT,
                     error TEXT,
                     extracted_text TEXT,
                     warning TEXT
@@ -1602,17 +1604,18 @@ def _ensure_improve_jobs_table():
                     cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
                 except Exception:
                     pass
-            for col, col_type in (
-                ('updated_at', 'TIMESTAMP'),
-                ('status', 'TEXT'),
-                ('progress', 'INTEGER'),
-                ('message', 'TEXT'),
-                ('result_html', 'TEXT'),
-                ('error', 'TEXT'),
-                ('extracted_text', 'TEXT'),
-                ('warning', 'TEXT')
-            ):
-                if col not in cols:
+                for col, col_type in (
+                    ('updated_at', 'TIMESTAMP'),
+                    ('status', 'TEXT'),
+                    ('progress', 'INTEGER'),
+                    ('message', 'TEXT'),
+                    ('result_html', 'TEXT'),
+                    ('result_json', 'TEXT'),
+                    ('error', 'TEXT'),
+                    ('extracted_text', 'TEXT'),
+                    ('warning', 'TEXT')
+                ):
+                    if col not in cols:
                     try:
                         cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
                     except Exception:
@@ -1627,6 +1630,7 @@ def _ensure_improve_jobs_table():
                     progress INTEGER DEFAULT 0,
                     message TEXT,
                     result_html TEXT,
+                    result_json TEXT,
                     error TEXT,
                     extracted_text TEXT,
                     warning TEXT
@@ -1646,17 +1650,18 @@ def _ensure_improve_jobs_table():
                     cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
                 except Exception:
                     pass
-            for col, col_type in (
-                ('updated_at', 'DATETIME'),
-                ('status', 'TEXT'),
-                ('progress', 'INTEGER'),
-                ('message', 'TEXT'),
-                ('result_html', 'TEXT'),
-                ('error', 'TEXT'),
-                ('extracted_text', 'TEXT'),
-                ('warning', 'TEXT')
-            ):
-                if col not in cols:
+                for col, col_type in (
+                    ('updated_at', 'DATETIME'),
+                    ('status', 'TEXT'),
+                    ('progress', 'INTEGER'),
+                    ('message', 'TEXT'),
+                    ('result_html', 'TEXT'),
+                    ('result_json', 'TEXT'),
+                    ('error', 'TEXT'),
+                    ('extracted_text', 'TEXT'),
+                    ('warning', 'TEXT')
+                ):
+                    if col not in cols:
                     try:
                         cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
                     except Exception:
@@ -1679,7 +1684,7 @@ def _create_improve_job(extracted_text, warning):
         conn.close()
     return job_id
 
-def _update_improve_job(job_id, status=None, progress=None, message=None, result_html=None, error=None, warning=None):
+def _update_improve_job(job_id, status=None, progress=None, message=None, result_html=None, result_json=None, error=None, warning=None):
     fields = []
     values = []
     if status is not None:
@@ -1694,6 +1699,9 @@ def _update_improve_job(job_id, status=None, progress=None, message=None, result
     if result_html is not None:
         fields.append("result_html = ?")
         values.append(result_html)
+    if result_json is not None:
+        fields.append("result_json = ?")
+        values.append(result_json)
     if error is not None:
         fields.append("error = ?")
         values.append(error)
@@ -1715,9 +1723,44 @@ def _build_result_html(ai_result, highlighted_text):
     if not ai_result:
         return '<p class="form__help">No issues detected.</p>'
     summary = ai_result.get('summary') or {}
+    stats = ai_result.get('stats') or {}
     issues = ai_result.get('issues') or []
-    sentences = ai_result.get('sentences') or []
+    score = ai_result.get('score')
+    issue_total = ai_result.get('issue_total')
+    rewrite_count = ai_result.get('rewrite_count')
+
+    if rewrite_count is None:
+        rewrite_count = sum(1 for i in issues if i.get('is_rewrite'))
+    if issue_total is None:
+        issue_total = summary.get('spelling', 0) + summary.get('grammar', 0) + summary.get('style', 0) + rewrite_count
+    if score is None:
+        score = max(35, min(100, 100 - (issue_total * 2)))
+
+    word_count = stats.get('word_count') or 0
+    sentence_count = stats.get('sentence_count') or 0
+    read_time = stats.get('read_time_minutes') or 0
+
+    def _fmt(value):
+        try:
+            return f"{int(value):,}"
+        except (TypeError, ValueError):
+            return "0"
+
     parts = []
+    parts.append('<div class="improve-workspace" data-improve-workspace>')
+    parts.append('<div class="improve-overview">')
+    parts.append('<div class="improve-score-card">')
+    parts.append(f'<div class="improve-score">{escape(str(score))}</div>')
+    parts.append('<div class="improve-score-label">Writing score</div>')
+    parts.append(f'<div class="improve-score-meta">{escape(str(issue_total))} suggestions</div>')
+    parts.append('</div>')
+    parts.append('<div class="improve-stat-grid">')
+    parts.append(f'<div class="improve-stat"><div class="improve-stat__value">{_fmt(word_count)}</div><div class="improve-stat__label">Words</div></div>')
+    parts.append(f'<div class="improve-stat"><div class="improve-stat__value">{_fmt(sentence_count)}</div><div class="improve-stat__label">Sentences</div></div>')
+    parts.append(f'<div class="improve-stat"><div class="improve-stat__value">{_fmt(read_time)}</div><div class="improve-stat__label">Read time (min)</div></div>')
+    parts.append('</div>')
+    parts.append('</div>')
+
     parts.append('<div class="improve-legend">')
     parts.append(
         f'<span><span class="improve-legend-swatch" style="background:#dc2626"></span> Spelling ({summary.get("spelling", 0)})</span>'
@@ -1728,77 +1771,99 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append(
         f'<span><span class="improve-legend-swatch" style="background:#2563eb"></span> Style ({summary.get("style", 0)})</span>'
     )
+    parts.append(
+        f'<span><span class="improve-legend-swatch" style="background:#0ea5e9"></span> Rewrites ({rewrite_count})</span>'
+    )
     parts.append('</div>')
-    parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>')
-    parts.append(f'<div class="improve-highlight">{highlighted_text}</div>')
-    parts.append('<h4 class="section__title" style="font-size: var(--fs-2xl); margin: var(--space-6) 0 var(--space-3);">Issues</h4>')
+
+    parts.append('<div class="improve-layout">')
+    parts.append('<div class="improve-document-card">')
+    parts.append('<div class="improve-document__header">')
+    parts.append('<div>')
+    parts.append('<h4 class="improve-document__title">Document</h4>')
+    parts.append('<p class="improve-document__meta">Click a highlight to review and apply suggestions.</p>')
+    parts.append('</div>')
+    parts.append('<button class="improve-copy" type="button" data-improve-copy>Copy revised text</button>')
+    parts.append('</div>')
+    parts.append(f'<div class="improve-highlight" data-improve-document>{highlighted_text}</div>')
+    parts.append('</div>')
+
+    parts.append('<aside class="improve-sidebar">')
+    parts.append('<div class="improve-sidebar__section">')
+    parts.append('<div class="improve-filter">')
+    parts.append(
+        f'<button class="improve-filter__btn is-active" type="button" data-improve-filter="all">All <span data-improve-count="all">{issue_total}</span></button>'
+    )
+    parts.append(
+        f'<button class="improve-filter__btn" type="button" data-improve-filter="grammar">Grammar <span data-improve-count="grammar">{summary.get("grammar", 0)}</span></button>'
+    )
+    parts.append(
+        f'<button class="improve-filter__btn" type="button" data-improve-filter="spelling">Spelling <span data-improve-count="spelling">{summary.get("spelling", 0)}</span></button>'
+    )
+    parts.append(
+        f'<button class="improve-filter__btn" type="button" data-improve-filter="style">Style <span data-improve-count="style">{summary.get("style", 0)}</span></button>'
+    )
+    parts.append(
+        f'<button class="improve-filter__btn" type="button" data-improve-filter="rewrite">Rewrite <span data-improve-count="rewrite">{rewrite_count}</span></button>'
+    )
+    parts.append('</div>')
+    parts.append('<div class="improve-issues-list" data-improve-issue-list>')
+
     if not issues:
         parts.append('<p class="form__help">No issues detected.</p>')
-        return ''.join(parts)
-
-    issues_by_sentence = {}
-    general_issues = []
-    for issue in issues:
-        sid = issue.get('sentence_id')
-        if sid is None:
-            general_issues.append(issue)
-        else:
-            issues_by_sentence.setdefault(sid, []).append(issue)
-
-    if sentences:
-        display_idx = 0
-        for sentence in sentences:
-            sentence_issues = issues_by_sentence.get(sentence.get('id'), [])
-            if not sentence_issues:
-                continue
-            display_idx += 1
-            sentence_text = escape(sentence.get('text') or '')
-            parts.append('<div style="margin-top: var(--space-6);">')
-            parts.append(f'<p class="form__help"><strong>Sentence {display_idx}:</strong> {sentence_text}</p>')
-            rewrite_issues = [i for i in sentence_issues if i.get('is_rewrite')]
-            regular_issues = [i for i in sentence_issues if not i.get('is_rewrite')]
-            kind_priority = {'grammar': 0, 'spelling': 1, 'style': 2}
-            regular_issues.sort(key=lambda item: (kind_priority.get(item.get('kind'), 3), item.get('start', 0)))
-            if rewrite_issues:
-                for issue in rewrite_issues:
-                    message = escape(issue.get('message') or '')
-                    if message:
-                        parts.append(f'<div class="improve-rewrite"><strong>Suggested rewrite:</strong> {message}</div>')
-            if regular_issues:
-                parts.append('<ul class="improve-issues">')
-            for issue in regular_issues:
-                kind = escape(issue.get('kind') or 'grammar')
-                message = escape(issue.get('message') or 'Issue detected.')
-                parts.append(f'<li><span class="improve-issues__kind improve-issues__kind-{kind}">{kind.replace("_", " ").title()}</span>')
-                parts.append(f'<span class="improve-issues__message">{message}</span>')
-                suggestions = issue.get('suggestions') or []
-                if suggestions:
-                    safe_suggestions = ", ".join(escape(s) for s in suggestions if s)
-                    if safe_suggestions:
-                        parts.append(f'<span class="improve-issues__suggestions">Suggestions: {safe_suggestions}</span>')
-                parts.append('</li>')
-            if regular_issues:
-                parts.append('</ul>')
-            parts.append('</div>')
-
-    if general_issues:
-        parts.append('<div style="margin-top: var(--space-6);">')
-        parts.append('<p class="form__help"><strong>Other notes:</strong></p>')
-        parts.append('<ul class="improve-issues">')
-        for issue in general_issues:
-            kind = escape(issue.get('kind') or 'grammar')
-            message = escape(issue.get('message') or 'Issue detected.')
-            parts.append(f'<li><span class="improve-issues__kind improve-issues__kind-{kind}">{kind.replace("_", " ").title()}</span>')
-            parts.append(f'<span class="improve-issues__message">{message}</span>')
+    else:
+        sorted_issues = sorted(issues, key=lambda item: (item.get('start', 0), item.get('end', 0)))
+        for issue in sorted_issues:
+            issue_id = escape(str(issue.get('issue_id') or ''))
+            kind = issue.get('kind') or 'grammar'
+            is_rewrite = bool(issue.get('is_rewrite'))
+            kind_key = 'rewrite' if is_rewrite else kind
+            kind_label = 'Rewrite' if is_rewrite else kind.replace('_', ' ').title()
+            raw_message = issue.get('message') or ''
+            message = escape(raw_message or 'Issue detected.')
             suggestions = issue.get('suggestions') or []
-            if suggestions:
-                safe_suggestions = ", ".join(escape(s) for s in suggestions if s)
-                if safe_suggestions:
-                    parts.append(f'<span class="improve-issues__suggestions">Suggestions: {safe_suggestions}</span>')
-            parts.append('</li>')
-        parts.append('</ul>')
-        parts.append('</div>')
+            suggestion_payload = [s for s in suggestions if s]
+            if is_rewrite and raw_message:
+                suggestion_payload = [raw_message]
+            safe_suggestions = escape(json.dumps(suggestion_payload))
+            suggestion_text = ", ".join(escape(s) for s in suggestion_payload if s)
+            start = issue.get('start', '')
+            end = issue.get('end', '')
+            parts.append(
+                f'<button class="improve-issue-card improve-issue-card--{kind_key}" type="button" '
+                f'data-issue-id="{issue_id}" data-kind="{escape(kind_key)}" data-message="{message}" '
+                f'data-start="{start}" data-end="{end}" data-suggestions="{safe_suggestions}" '
+                f'data-is-rewrite="{str(is_rewrite).lower()}">'
+            )
+            parts.append(f'<div class="improve-issue-card__kind">{escape(kind_label)}</div>')
+            if is_rewrite:
+                parts.append(f'<div class="improve-issue-card__message">Suggested rewrite: {message}</div>')
+            else:
+                parts.append(f'<div class="improve-issue-card__message">{message}</div>')
+            if suggestion_text:
+                parts.append(f'<div class="improve-issue-card__suggestion">Suggestions: {suggestion_text}</div>')
+            parts.append('</button>')
+
+    parts.append('</div>')
+    parts.append('</div>')
+
+    parts.append('<div class="improve-detail" data-improve-detail>')
+    parts.append('<div class="improve-detail__empty" data-improve-detail-empty>Select an issue to see details and apply a fix.</div>')
+    parts.append('<div class="improve-detail__content" data-improve-detail-content hidden></div>')
+    parts.append('</div>')
+    parts.append('</aside>')
+    parts.append('</div>')
+    parts.append('</div>')
     return ''.join(parts)
+
+def _serialize_improve_json(ai_result):
+    if not ai_result:
+        return None
+    try:
+        payload = json.dumps(ai_result, ensure_ascii=True)
+    except Exception:
+        return None
+    return payload.replace('<', '\\u003c')
 
 def _process_improve_job(job_id, extracted_text, warning):
     start_time = time.time()
@@ -1836,8 +1901,17 @@ def _process_improve_job(job_id, extracted_text, warning):
                 combined_warning = analysis_warning
         highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
         result_html = _build_result_html(ai_result, highlighted)
+        result_json = _serialize_improve_json(ai_result)
         final_message = combined_warning if combined_warning else 'Complete'
-        _update_improve_job(job_id, status='done', progress=100, result_html=result_html, message=final_message, warning=combined_warning)
+        _update_improve_job(
+            job_id,
+            status='done',
+            progress=100,
+            result_html=result_html,
+            result_json=result_json,
+            message=final_message,
+            warning=combined_warning
+        )
     except Exception as exc:
         app.logger.exception("Improve AI background job failed")
         err_msg = str(exc).strip() or "Writing checker failed unexpectedly. Please try again or use Human Review."
@@ -2490,14 +2564,42 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
     if progress_cb:
         progress_cb(95, "Finalizing...")
 
+    for idx, issue in enumerate(issues, start=1):
+        issue.setdefault('issue_id', f'issue-{idx}')
+
     summary = {
         'spelling': sum(1 for i in issues if i['kind'] == 'spelling' and not i.get('no_highlight')),
         'grammar': sum(1 for i in issues if i['kind'] == 'grammar' and not i.get('no_highlight')),
         'style': sum(1 for i in issues if i['kind'] == 'style' and not i.get('no_highlight') and not i.get('is_rewrite'))
     }
 
+    sentence_count = len(sentences)
+    if sentence_count == 0 and text.strip():
+        sentence_count = max(1, len(re.findall(r'[.!?]+', text)))
+
+    word_count = token_count
+    read_time_minutes = int(math.ceil(word_count / 200)) if word_count else 0
+
+    rewrite_count = sum(1 for i in issues if i.get('is_rewrite'))
+    issue_total = summary['spelling'] + summary['grammar'] + summary['style'] + rewrite_count
+    score = max(35, min(100, 100 - (issue_total * 2)))
+
+    stats = {
+        'word_count': word_count,
+        'sentence_count': sentence_count,
+        'read_time_minutes': read_time_minutes
+    }
+
     warning = '; '.join(warnings) if warnings else None
-    return {'issues': issues, 'summary': summary, 'sentences': sentences}, None, warning
+    return {
+        'issues': issues,
+        'summary': summary,
+        'sentences': sentences,
+        'stats': stats,
+        'score': score,
+        'issue_total': issue_total,
+        'rewrite_count': rewrite_count
+    }, None, warning
 def _build_highlighted_html(text, issues):
     if not issues:
         return Markup(escape(text))
@@ -2517,7 +2619,12 @@ def _build_highlighted_html(text, issues):
         pieces.append(escape(text[last_index:start]))
         segment = escape(text[start:end])
         issue_kind = issue.get('kind') or issue.get('type') or 'style'
-        pieces.append(f'<span class="improve-issue-{issue_kind}">{segment}</span>')
+        issue_id = escape(str(issue.get('issue_id') or ''))
+        data_kind = escape(issue_kind)
+        pieces.append(
+            f'<span class="improve-issue-{issue_kind}" data-issue-id="{issue_id}" data-kind="{data_kind}" '
+            f'data-start="{start}" data-end="{end}" tabindex="0" role="button">{segment}</span>'
+        )
         last_index = end
     pieces.append(escape(text[last_index:]))
     return Markup(''.join(pieces))
@@ -2748,7 +2855,7 @@ def improve_result(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = _open_db()
     cursor.execute('''
-        SELECT status, message, extracted_text, result_html, error, warning
+        SELECT status, message, extracted_text, result_html, result_json, error, warning
         FROM improve_jobs
         WHERE job_id = ?
     ''', (job_id,))
@@ -2756,7 +2863,7 @@ def improve_result(job_id):
     conn.close()
     if not row:
         return render_template('improve.html', ai_result=None, highlighted_text=None, extracted_text=None, error="Result not found.", ai_results_json=None, human_notice=None, prefill_text='')
-    status, message, extracted_text, result_html, error, warning = row
+    status, message, extracted_text, result_html, result_json, error, warning = row
     if status != 'done' or not result_html:
         return render_template(
             'improve.html',
@@ -2771,7 +2878,7 @@ def improve_result(job_id):
     return render_template(
         'improve_results.html',
         result_html=result_html,
-        ai_results_json=result_html,
+        ai_results_json=result_json or '',
         extracted_text=extracted_text or '',
         warning=warning
     )

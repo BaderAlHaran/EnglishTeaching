@@ -528,6 +528,447 @@ class PerformanceOptimizer {
   }
 }
 
+// ===== IMPROVE INPUT STATS =====
+class ImproveInputStats {
+  constructor() {
+    this.textarea = document.querySelector('[data-improve-input]');
+    this.wordEl = document.querySelector('[data-improve-word-count]');
+    this.charEl = document.querySelector('[data-improve-char-count]');
+    if (!this.textarea || !this.wordEl || !this.charEl) {
+      return;
+    }
+    this.maxChars = parseInt(this.textarea.getAttribute('data-max-chars'), 10) || null;
+    this.update = this.update.bind(this);
+    this.textarea.addEventListener('input', this.update);
+    this.update();
+  }
+
+  countWords(text) {
+    const matches = text.trim().match(/[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?/g);
+    return matches ? matches.length : 0;
+  }
+
+  update() {
+    const text = this.textarea.value || '';
+    const words = this.countWords(text);
+    this.wordEl.textContent = `${words} words`;
+    const charsLabel = this.maxChars ? `${text.length} / ${this.maxChars} chars` : `${text.length} chars`;
+    this.charEl.textContent = charsLabel;
+  }
+}
+
+// ===== IMPROVE WORKSPACE =====
+class ImproveWorkspace {
+  constructor() {
+    this.root = document.querySelector('[data-improve-workspace]');
+    if (!this.root) {
+      return;
+    }
+    this.data = this.loadData();
+    if (!this.data) {
+      return;
+    }
+    this.documentEl = this.root.querySelector('[data-improve-document]');
+    this.listEl = this.root.querySelector('[data-improve-issue-list]');
+    this.detailEmptyEl = this.root.querySelector('[data-improve-detail-empty]');
+    this.detailContentEl = this.root.querySelector('[data-improve-detail-content]');
+    this.copyBtn = this.root.querySelector('[data-improve-copy]');
+    this.filterButtons = Array.from(this.root.querySelectorAll('[data-improve-filter]'));
+    this.countEls = Array.from(this.root.querySelectorAll('[data-improve-count]'));
+    this.scoreEl = this.root.querySelector('.improve-score');
+    this.scoreMetaEl = this.root.querySelector('.improve-score-meta');
+
+    const textField = document.querySelector('textarea[name="extracted_text"]');
+    this.textField = textField || null;
+    this.text = textField ? textField.value : '';
+    this.issues = (this.data.issues || []).map((issue, index) => this.normalizeIssue(issue, index));
+    this.filter = 'all';
+    this.selectedIssueId = null;
+
+    this.bindEvents();
+    this.renderAll();
+  }
+
+  loadData() {
+    const dataEl = document.getElementById('improve-data');
+    if (!dataEl) {
+      return null;
+    }
+    try {
+      return JSON.parse(dataEl.textContent);
+    } catch (err) {
+      console.error('Failed to parse improve data', err);
+      return null;
+    }
+  }
+
+  normalizeIssue(issue, index) {
+    const normalized = { ...issue };
+    normalized.issue_id = normalized.issue_id || `issue-${index + 1}`;
+    normalized.kind = normalized.kind || 'grammar';
+    normalized.status = 'open';
+    normalized.start = Number.isFinite(parseInt(normalized.start, 10)) ? parseInt(normalized.start, 10) : null;
+    normalized.end = Number.isFinite(parseInt(normalized.end, 10)) ? parseInt(normalized.end, 10) : null;
+    normalized.is_rewrite = Boolean(normalized.is_rewrite);
+    normalized.no_highlight = Boolean(normalized.no_highlight);
+    normalized.suggestions = Array.isArray(normalized.suggestions) ? normalized.suggestions.filter(Boolean) : [];
+    if (normalized.is_rewrite && normalized.suggestions.length === 0 && normalized.message) {
+      normalized.suggestions = [normalized.message];
+    }
+    return normalized;
+  }
+
+  bindEvents() {
+    if (this.listEl) {
+      this.listEl.addEventListener('click', (event) => {
+        const card = event.target.closest('[data-issue-id]');
+        if (!card) {
+          return;
+        }
+        this.selectIssue(card.getAttribute('data-issue-id'));
+      });
+    }
+
+    if (this.documentEl) {
+      this.documentEl.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-issue-id]');
+        if (!target) {
+          return;
+        }
+        this.selectIssue(target.getAttribute('data-issue-id'));
+      });
+      this.documentEl.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+        const target = event.target.closest('[data-issue-id]');
+        if (!target) {
+          return;
+        }
+        event.preventDefault();
+        this.selectIssue(target.getAttribute('data-issue-id'));
+      });
+    }
+
+    if (this.detailContentEl) {
+      this.detailContentEl.addEventListener('click', (event) => {
+        const action = event.target.getAttribute('data-improve-action');
+        const issueId = event.target.getAttribute('data-issue-id');
+        if (!action || !issueId) {
+          return;
+        }
+        if (action === 'apply') {
+          const suggestion = decodeURIComponent(event.target.getAttribute('data-suggestion') || '');
+          this.applySuggestion(issueId, suggestion);
+        }
+        if (action === 'ignore') {
+          this.ignoreIssue(issueId);
+        }
+      });
+    }
+
+    this.filterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        this.setFilter(button.getAttribute('data-improve-filter'));
+      });
+    });
+
+    if (this.copyBtn) {
+      this.copyBtn.addEventListener('click', () => this.copyText());
+    }
+  }
+
+  setFilter(filter) {
+    this.filter = filter || 'all';
+    this.filterButtons.forEach((button) => {
+      button.classList.toggle('is-active', button.getAttribute('data-improve-filter') === this.filter);
+    });
+    this.renderIssueList();
+  }
+
+  selectIssue(issueId) {
+    this.selectedIssueId = issueId;
+    this.renderAll();
+    this.scrollToHighlight(issueId);
+  }
+
+  findIssue(issueId) {
+    return this.issues.find((issue) => issue.issue_id === issueId);
+  }
+
+  renderAll() {
+    this.renderHighlight();
+    this.renderIssueList();
+    this.renderDetail();
+    this.updateCounts();
+  }
+
+  updateCounts() {
+    const counts = { grammar: 0, spelling: 0, style: 0, rewrite: 0 };
+    this.issues.forEach((issue) => {
+      if (issue.status !== 'open') {
+        return;
+      }
+      if (issue.is_rewrite) {
+        counts.rewrite += 1;
+      } else if (counts[issue.kind] !== undefined) {
+        counts[issue.kind] += 1;
+      }
+    });
+    const total = counts.grammar + counts.spelling + counts.style + counts.rewrite;
+    this.countEls.forEach((el) => {
+      const key = el.getAttribute('data-improve-count');
+      if (!key) {
+        return;
+      }
+      if (key === 'all') {
+        el.textContent = total;
+      } else if (counts[key] !== undefined) {
+        el.textContent = counts[key];
+      }
+    });
+    if (this.scoreEl) {
+      const score = Math.max(35, Math.min(100, 100 - total * 2));
+      this.scoreEl.textContent = score;
+    }
+    if (this.scoreMetaEl) {
+      this.scoreMetaEl.textContent = `${total} suggestions`;
+    }
+  }
+
+  renderHighlight() {
+    if (!this.documentEl) {
+      return;
+    }
+    if (!this.text) {
+      return;
+    }
+    const activeId = this.selectedIssueId;
+    const visibleIssues = this.issues
+      .filter((issue) => issue.status === 'open' && !issue.no_highlight)
+      .filter((issue) => Number.isFinite(issue.start) && Number.isFinite(issue.end));
+
+    visibleIssues.sort((a, b) => {
+      if (a.start === b.start) {
+        return (b.end - b.start) - (a.end - a.start);
+      }
+      return a.start - b.start;
+    });
+
+    let lastIndex = 0;
+    let html = '';
+    visibleIssues.forEach((issue) => {
+      if (issue.start < lastIndex || issue.end <= issue.start || issue.start > this.text.length) {
+        return;
+      }
+      html += this.escapeHtml(this.text.slice(lastIndex, issue.start));
+      const segment = this.escapeHtml(this.text.slice(issue.start, issue.end));
+      const activeClass = issue.issue_id === activeId ? ' is-active' : '';
+      html += `<span class="improve-issue-${issue.kind}${activeClass}" data-issue-id="${issue.issue_id}" data-kind="${issue.kind}" data-start="${issue.start}" data-end="${issue.end}" tabindex="0" role="button">${segment}</span>`;
+      lastIndex = issue.end;
+    });
+    html += this.escapeHtml(this.text.slice(lastIndex));
+    this.documentEl.innerHTML = html;
+  }
+
+  renderIssueList() {
+    if (!this.listEl) {
+      return;
+    }
+    const issues = this.getFilteredIssues();
+    if (!issues.length) {
+      this.listEl.innerHTML = '<p class="form__help">No issues in this category.</p>';
+      return;
+    }
+    const html = issues.map((issue) => this.renderIssueCard(issue)).join('');
+    this.listEl.innerHTML = html;
+  }
+
+  renderIssueCard(issue) {
+    const kindKey = issue.is_rewrite ? 'rewrite' : issue.kind;
+    const kindLabel = issue.is_rewrite ? 'Rewrite' : this.toTitle(issue.kind);
+    const isActive = issue.issue_id === this.selectedIssueId ? ' is-active' : '';
+    const message = this.escapeHtml(issue.message || 'Issue detected.');
+    const suggestions = issue.suggestions || [];
+    const suggestionText = suggestions.length ? `Suggestions: ${this.escapeHtml(suggestions.join(', '))}` : '';
+    return `
+      <button class="improve-issue-card improve-issue-card--${kindKey}${isActive}" type="button" data-issue-id="${issue.issue_id}">
+        <div class="improve-issue-card__kind">${kindLabel}</div>
+        <div class="improve-issue-card__message">${issue.is_rewrite ? `Suggested rewrite: ${message}` : message}</div>
+        ${suggestionText ? `<div class="improve-issue-card__suggestion">${suggestionText}</div>` : ''}
+      </button>
+    `;
+  }
+
+  renderDetail() {
+    if (!this.detailContentEl || !this.detailEmptyEl) {
+      return;
+    }
+    const issue = this.findIssue(this.selectedIssueId);
+    if (!issue || issue.status !== 'open') {
+      this.detailContentEl.hidden = true;
+      this.detailEmptyEl.style.display = 'block';
+      return;
+    }
+    const kindLabel = issue.is_rewrite ? 'Rewrite suggestion' : this.toTitle(issue.kind);
+    const message = issue.message || 'Issue detected.';
+    const suggestions = issue.suggestions && issue.suggestions.length ? issue.suggestions : [];
+
+    let suggestionsHtml = '<p class="improve-detail__empty">No suggestion available.</p>';
+    if (suggestions.length) {
+      suggestionsHtml = suggestions.map((suggestion) => {
+        const encoded = encodeURIComponent(suggestion);
+        return `<button class="improve-suggestion" type="button" data-improve-action="apply" data-issue-id="${issue.issue_id}" data-suggestion="${encoded}">${this.escapeHtml(suggestion)}</button>`;
+      }).join('');
+    }
+
+    this.detailContentEl.innerHTML = `
+      <div class="improve-detail__title">${kindLabel}</div>
+      <div class="improve-detail__message">${this.escapeHtml(message)}</div>
+      <div class="improve-detail__suggestions">${suggestionsHtml}</div>
+      <div class="improve-detail__actions">
+        ${suggestions.length ? `<button class="improve-action improve-action--apply" type="button" data-improve-action="apply" data-issue-id="${issue.issue_id}" data-suggestion="${encodeURIComponent(suggestions[0])}">Apply top suggestion</button>` : ''}
+        <button class="improve-action improve-action--ignore" type="button" data-improve-action="ignore" data-issue-id="${issue.issue_id}">Ignore</button>
+      </div>
+    `;
+    this.detailEmptyEl.style.display = 'none';
+    this.detailContentEl.hidden = false;
+  }
+
+  applySuggestion(issueId, suggestion) {
+    if (!suggestion) {
+      return;
+    }
+    const issue = this.findIssue(issueId);
+    if (!issue || !Number.isFinite(issue.start) || !Number.isFinite(issue.end)) {
+      return;
+    }
+    const originalEnd = issue.end;
+    const before = this.text.slice(0, issue.start);
+    const after = this.text.slice(issue.end);
+    const originalLength = originalEnd - issue.start;
+    const delta = suggestion.length - originalLength;
+    this.text = `${before}${suggestion}${after}`;
+    issue.status = 'accepted';
+    issue.end = issue.start + suggestion.length;
+
+    this.issues.forEach((other) => {
+      if (other.issue_id === issue.issue_id || other.status !== 'open') {
+        return;
+      }
+      if (!Number.isFinite(other.start) || !Number.isFinite(other.end)) {
+        return;
+      }
+      if (other.start >= originalEnd) {
+        other.start += delta;
+        other.end += delta;
+      } else if (other.end > issue.start && other.start < originalEnd) {
+        other.status = 'ignored';
+      }
+    });
+
+    if (this.textField) {
+      this.textField.value = this.text;
+    }
+    this.selectedIssueId = null;
+    this.renderAll();
+  }
+
+  ignoreIssue(issueId) {
+    const issue = this.findIssue(issueId);
+    if (!issue) {
+      return;
+    }
+    issue.status = 'ignored';
+    if (this.selectedIssueId === issueId) {
+      this.selectedIssueId = null;
+    }
+    this.renderAll();
+  }
+
+  getFilteredIssues() {
+    return this.issues.filter((issue) => {
+      if (issue.status !== 'open') {
+        return false;
+      }
+      if (this.filter === 'all') {
+        return true;
+      }
+      if (this.filter === 'rewrite') {
+        return issue.is_rewrite;
+      }
+      return issue.kind === this.filter;
+    });
+  }
+
+  scrollToHighlight(issueId) {
+    if (!this.documentEl || !issueId) {
+      return;
+    }
+    const highlight = this.documentEl.querySelector(`[data-issue-id="${this.escapeSelector(issueId)}"]`);
+    if (highlight) {
+      highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  copyText() {
+    if (!this.text) {
+      return;
+    }
+    const originalLabel = this.copyBtn ? this.copyBtn.textContent : '';
+    const onCopySuccess = () => {
+      if (!this.copyBtn) {
+        return;
+      }
+      this.copyBtn.textContent = 'Copied';
+      setTimeout(() => {
+        this.copyBtn.textContent = originalLabel;
+      }, 2000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(this.text).then(onCopySuccess).catch(() => {});
+      return;
+    }
+    const temp = document.createElement('textarea');
+    temp.value = this.text;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+    try {
+      document.execCommand('copy');
+      onCopySuccess();
+    } catch (e) {
+      // no-op
+    } finally {
+      document.body.removeChild(temp);
+    }
+  }
+
+  escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  escapeSelector(value) {
+    if (window.CSS && window.CSS.escape) {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  toTitle(value) {
+    return String(value || '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+}
+
 // ===== UTILITY FUNCTIONS =====
 class Utils {
   static throttle(func, limit) {
@@ -611,6 +1052,8 @@ document.addEventListener('DOMContentLoaded', () => {
   new ReviewSystem();
   new FormValidation();
   new PerformanceOptimizer();
+  new ImproveInputStats();
+  new ImproveWorkspace();
   
   // Lightweight internal analytics (skip admin/auth pages and obvious bots)
   const path = window.location.pathname || '/';
@@ -680,6 +1123,8 @@ if (typeof module !== 'undefined' && module.exports) {
     ParallaxEffect,
     FormValidation,
     PerformanceOptimizer,
+    ImproveInputStats,
+    ImproveWorkspace,
     Utils
   };
 }
