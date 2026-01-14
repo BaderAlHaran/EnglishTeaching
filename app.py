@@ -1533,7 +1533,10 @@ def _extract_text_from_upload(file_storage):
                 parts.append(page.extract_text() or '')
             except Exception:
                 parts.append('')
-        return "\n".join(parts).strip(), None
+        text = "\n".join(parts).strip()
+        if not text:
+            return None, "No text could be extracted from the PDF."
+        return text, None
 
     try:
         import docx
@@ -1541,6 +1544,8 @@ def _extract_text_from_upload(file_storage):
         return None, "DOCX support is unavailable. Please install python-docx."
     document = docx.Document(io.BytesIO(data))
     text = "\n".join(p.text for p in document.paragraphs).strip()
+    if not text:
+        return None, "No text could be extracted from the DOCX."
     return text, None
 
 def _analyze_text_placeholder(text):
@@ -1588,7 +1593,7 @@ def _build_highlighted_html(text, issues):
         pieces.append(escape(text[last_index:start]))
         segment = escape(text[start:end])
         issue_type = issue.get('type', 'clarity')
-        pieces.append(f'<span class="issue {issue_type}">{segment}</span>')
+        pieces.append(f'<span class="improve-issue-{issue_type}">{segment}</span>')
         last_index = end
     pieces.append(escape(text[last_index:]))
     return Markup(''.join(pieces))

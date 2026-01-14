@@ -1,187 +1,305 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Improve Your Writing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root {
-      --border: #d9d9d9;
-      --muted: #6b6b6b;
-      --bg: #f7f7f7;
-      --card: #ffffff;
-      --danger: #b00020;
-      --ok: #0b6d2f;
-    }
-    body {
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      background: var(--bg);
-      color: #1e1e1e;
-    }
-    .wrap {
-      max-width: 980px;
-      margin: 32px auto;
-      padding: 0 16px 48px;
-    }
-    h1 {
-      font-size: 32px;
-      margin-bottom: 8px;
-    }
-    .lead {
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .panel h2 {
-      margin-top: 0;
-      font-size: 22px;
-    }
-    label {
-      font-weight: bold;
-      display: block;
-      margin: 12px 0 6px;
-    }
-    textarea {
-      width: 100%;
-      min-height: 140px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 10px;
-      font-family: inherit;
-    }
-    input[type="file"] {
-      margin-top: 6px;
-    }
-    .actions {
-      margin-top: 14px;
-    }
-    button {
-      background: #111;
-      color: #fff;
-      border: none;
-      padding: 10px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: #444;
-    }
-    .note {
-      color: var(--muted);
-      font-size: 14px;
-    }
-    .error {
-      color: var(--danger);
-      font-weight: bold;
-      margin-bottom: 12px;
-    }
-    .notice {
-      color: var(--ok);
-      font-weight: bold;
-      margin-bottom: 12px;
-    }
-    .results {
-      border-top: 1px solid var(--border);
-      margin-top: 16px;
-      padding-top: 16px;
-    }
-    .issue.grammar { background: rgba(255, 0, 0, 0.2); }
-    .issue.clarity { background: rgba(0, 90, 255, 0.2); }
-    .issue.similarity { background: rgba(128, 0, 128, 0.2); }
-    .legend span {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      margin-right: 8px;
-    }
-    .legend .grammar { background: rgba(255, 0, 0, 0.2); }
-    .legend .clarity { background: rgba(0, 90, 255, 0.2); }
-    .legend .similarity { background: rgba(128, 0, 128, 0.2); }
-    .highlight-box {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 12px;
-      background: #fff;
-      white-space: pre-wrap;
-      line-height: 1.6;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improve Your Writing - English Essay Writing</title>
+    <meta name="description" content="Improve your writing with optional AI feedback or direct human review.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+
+    <!-- Font Awesome -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+    <link rel="canonical" href="https://englishessaywriting.net/improve">
+
+    <style>
+        .improve-hero {
+            padding: calc(70px + var(--space-24)) 0 var(--space-16);
+            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            text-align: center;
+        }
+        .improve-hero__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-5xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-4);
+        }
+        .improve-hero__description {
+            font-size: var(--fs-xl);
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .improve-hero__note {
+            margin-top: var(--space-6);
+            color: var(--text-secondary);
+            font-size: var(--fs-base);
+        }
+        .improve-section {
+            padding: var(--space-20) 0 var(--space-24);
+            background: var(--background-secondary);
+        }
+        .improve-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: var(--space-10);
+        }
+        .improve-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-10);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-card__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-2xl);
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+        }
+        .improve-card__subtitle {
+            color: var(--text-secondary);
+            margin-bottom: var(--space-6);
+        }
+        .improve-alert {
+            margin: 0 auto var(--space-6);
+            max-width: 800px;
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+        }
+        .improve-alert--error {
+            background: #fdecea;
+            color: #b42318;
+            border: 1px solid #f5c2c7;
+        }
+        .improve-alert--success {
+            background: #ecfdf3;
+            color: #027a48;
+            border: 1px solid #abefc6;
+        }
+        .improve-file {
+            width: 100%;
+            padding: var(--space-4);
+            border: 2px dashed var(--gray-300);
+            border-radius: var(--radius-md);
+            background-color: var(--gray-100);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+        .improve-file:hover {
+            border-color: var(--accent-color);
+            background-color: rgba(39, 174, 96, 0.05);
+        }
+        .improve-results {
+            margin-top: var(--space-8);
+            border-top: 1px solid var(--gray-200);
+            padding-top: var(--space-6);
+        }
+        .improve-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .improve-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-full);
+            font-size: var(--fs-sm);
+            background: var(--gray-100);
+        }
+        .improve-highlight {
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            background: var(--white);
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.7;
+        }
+        .improve-issue-grammar { background: rgba(220, 38, 38, 0.2); }
+        .improve-issue-clarity { background: rgba(37, 99, 235, 0.2); }
+        .improve-issue-similarity { background: rgba(128, 0, 128, 0.2); }
+        .improve-btn-secondary {
+            background: transparent;
+            border: 2px solid var(--text-primary);
+            color: var(--text-primary);
+        }
+        .improve-btn-secondary:hover {
+            background: var(--text-primary);
+            color: var(--white);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        .improve-hidden { display: none; }
+
+        @media (max-width: 768px) {
+            .improve-hero__title { font-size: var(--fs-4xl); }
+        }
+    </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Improve Your Writing</h1>
-    <p class="lead">Choose the option that suits you. Both are optional and independent.</p>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <h1 class="nav__logo">English Essay Writing</h1>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item">
+                    <a href="/" class="nav__link">Home</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#services" class="nav__link">Services</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#process" class="nav__link">Process</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/improve" class="nav__link active">Improve Writing</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/about" class="nav__link">About</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/contact" class="nav__link">Contact</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/faq" class="nav__link">FAQ</a>
+                </li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
 
-    {% if error %}
-      <div class="error">{{ error }}</div>
-    {% endif %}
-    {% if human_notice %}
-      <div class="notice">{{ human_notice }}</div>
-    {% endif %}
-
-    <div class="panel">
-      <h2>Option 1: AI Check (Optional)</h2>
-      <p class="note">Paste text or upload a PDF/DOCX. We'll return your text with highlighted issues.</p>
-      <form action="/improve/ai" method="post" enctype="multipart/form-data">
-        <label for="ai-text">Paste your text</label>
-        <textarea id="ai-text" name="text" placeholder="Paste your text here..."></textarea>
-
-        <label for="ai-file">Or upload a file (.pdf, .docx)</label>
-        <input id="ai-file" type="file" name="file" accept=".pdf,.docx">
-
-        <div class="actions">
-          <button type="submit">Run AI Check</button>
+    <section class="improve-hero">
+        <div class="container">
+            <h2 class="improve-hero__title">Improve Your Writing</h2>
+            <p class="improve-hero__description">Get optional AI feedback or send your text directly to a human reviewer. Choose the option that fits your needs.</p>
+            <p class="improve-hero__note">AI is optional. You may submit directly to a human reviewer.</p>
         </div>
-      </form>
+    </section>
 
-      {% if ai_result %}
-      <div class="results">
-        <div class="legend">
-          <span class="grammar">Grammar issues</span>
-          <span class="clarity">Clarity/style issues</span>
-          <span class="similarity">Similarity warnings</span>
+    <section class="improve-section">
+        <div class="container">
+            {% if error %}
+                <div class="improve-alert improve-alert--error">{{ error }}</div>
+            {% endif %}
+            {% if human_notice %}
+                <div class="improve-alert improve-alert--success">{{ human_notice }}</div>
+            {% endif %}
+
+            <div class="improve-grid">
+                <div class="improve-card">
+                    <h3 class="improve-card__title">Option 1: AI Check (Optional)</h3>
+                    <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. If a file is uploaded, it will be used instead of pasted text.</p>
+                    <form action="/improve/ai" method="post" enctype="multipart/form-data">
+                        <div class="form__group">
+                            <label class="form__label" for="ai-text">Paste your text</label>
+                            <textarea class="form__textarea" id="ai-text" name="text" placeholder="Paste your text here..."></textarea>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="ai-file">Or upload a file (.pdf, .docx)</label>
+                            <input class="improve-file" id="ai-file" type="file" name="file" accept=".pdf,.docx">
+                            <span class="form__help">Maximum file size: 10MB.</span>
+                        </div>
+                        <button class="btn btn--primary" type="submit">Run AI Check</button>
+                    </form>
+
+                    {% if ai_result %}
+                    <div class="improve-results">
+                        <div class="improve-legend">
+                            <span><span class="improve-issue-grammar">&nbsp;&nbsp;&nbsp;</span> Grammar issues</span>
+                            <span><span class="improve-issue-clarity">&nbsp;&nbsp;&nbsp;</span> Clarity/style issues</span>
+                            <span><span class="improve-issue-similarity">&nbsp;&nbsp;&nbsp;</span> Similarity warnings</span>
+                        </div>
+                        <h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>
+                        <div class="improve-highlight">{{ highlighted_text|safe }}</div>
+                        <p class="form__help" style="margin-top: var(--space-4);">
+                            Grammar: {{ ai_result.summary.grammar }} | Clarity: {{ ai_result.summary.clarity }} | Similarity: {{ ai_result.summary.similarity }}
+                        </p>
+                        <form action="/improve/human" method="post" style="margin-top: var(--space-6);">
+                            <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
+                            <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|e }}</textarea>
+                            <button class="btn improve-btn-secondary" type="submit">Send to Human for Correction</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="improve-card">
+                    <h3 class="improve-card__title">Option 2: Human Review Only (No AI)</h3>
+                    <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. Your submission goes straight to a human reviewer.</p>
+                    <form action="/improve/human" method="post" enctype="multipart/form-data">
+                        <div class="form__group">
+                            <label class="form__label" for="human-text">Paste your text</label>
+                            <textarea class="form__textarea" id="human-text" name="text" placeholder="Paste your text here..."></textarea>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="human-file">Or upload a file (.pdf, .docx)</label>
+                            <input class="improve-file" id="human-file" type="file" name="file" accept=".pdf,.docx">
+                            <span class="form__help">Maximum file size: 10MB.</span>
+                        </div>
+                        <button class="btn btn--primary" type="submit">Send to Human Review</button>
+                    </form>
+                </div>
+            </div>
         </div>
-        <h3>Highlighted Text</h3>
-        <div class="highlight-box">{{ highlighted_text|safe }}</div>
+    </section>
 
-        <h3>Summary</h3>
-        <p class="note">
-          Grammar: {{ ai_result.summary.grammar }} | Clarity: {{ ai_result.summary.clarity }} | Similarity: {{ ai_result.summary.similarity }}
-        </p>
-
-        <form action="/improve/human" method="post">
-          <textarea name="extracted_text" style="display:none;">{{ extracted_text|e }}</textarea>
-          <textarea name="ai_results_json" style="display:none;">{{ ai_results_json|e }}</textarea>
-          <div class="actions">
-            <button class="secondary" type="submit">Send to Human for Correction</button>
-          </div>
-        </form>
-      </div>
-      {% endif %}
-    </div>
-
-    <div class="panel">
-      <h2>Option 2: Human Review Only (No AI)</h2>
-      <p class="note">Paste text or upload a PDF/DOCX. Your submission goes straight to a human reviewer.</p>
-      <form action="/improve/human" method="post" enctype="multipart/form-data">
-        <label for="human-text">Paste your text</label>
-        <textarea id="human-text" name="text" placeholder="Paste your text here..."></textarea>
-
-        <label for="human-file">Or upload a file (.pdf, .docx)</label>
-        <input id="human-file" type="file" name="file" accept=".pdf,.docx">
-
-        <div class="actions">
-          <button type="submit">Send to Human Review</button>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>norakalmutairi@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copy">
+                    &copy; 2026 English Essay Writing. All rights reserved.
+                </p>
+            </div>
         </div>
-      </form>
-    </div>
-  </div>
+    </footer>
+
+    <script src="script.js" defer></script>
 </body>
 </html>

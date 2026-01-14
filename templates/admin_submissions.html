@@ -1,87 +1,215 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Submissions</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      color: #1e1e1e;
-    }
-    .wrap {
-      max-width: 1100px;
-      margin: 24px auto;
-      padding: 0 16px 40px;
-    }
-    h1 { margin-bottom: 16px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      border: 1px solid #ddd;
-    }
-    th, td {
-      text-align: left;
-      padding: 10px;
-      border-bottom: 1px solid #eee;
-      vertical-align: top;
-    }
-    th {
-      background: #fafafa;
-    }
-    details {
-      margin-top: 6px;
-    }
-    pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      background: #f8f8f8;
-      padding: 10px;
-      border-radius: 6px;
-    }
-    .muted {
-      color: #666;
-      font-size: 13px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improve Submissions - Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px 60px;
+        }
+        .page-header {
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .page-subtitle {
+            color: #64748b;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 10px 14px;
+            background: #0f172a;
+            color: #fff;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .table-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+        }
+        .table-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .table-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .data-table th {
+            background: #f8fafc;
+            padding: 16px 20px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .data-table td {
+            padding: 16px 20px;
+            vertical-align: top;
+            border-bottom: 1px solid #f1f5f9;
+            word-break: break-word;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-new { background: #e0f2fe; color: #0369a1; }
+        .badge-human { background: #fef3c7; color: #b45309; }
+        .badge-ai { background: #ede9fe; color: #6d28d9; }
+        details {
+            margin-top: 6px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .empty-state {
+            padding: 48px 24px;
+            text-align: center;
+            color: #64748b;
+        }
+        @media (max-width: 768px) {
+            .main-content { padding: 24px 16px 40px; }
+            .page-title { font-size: 22px; }
+            .data-table, .data-table thead, .data-table tbody, .data-table th, .data-table td, .data-table tr { display: block; }
+            .data-table thead { display: none; }
+            .data-table tr {
+                background: #ffffff;
+                margin: 0 0 12px;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 8px 0;
+            }
+            .data-table td {
+                border: none;
+                border-bottom: 1px solid #f3f4f6;
+                position: relative;
+                padding: 12px 16px 12px 120px;
+                min-height: 46px;
+            }
+            .data-table td:last-child { border-bottom: 0; }
+            .data-table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 16px;
+                top: 12px;
+                width: 90px;
+                font-weight: 600;
+                color: #64748b;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }
+        }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
 </head>
 <body>
-  <div class="wrap">
-    <h1>Improve Your Writing - Submissions</h1>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Created</th>
-          <th>Mode</th>
-          <th>Status</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for sub in submissions %}
-        <tr>
-          <td>{{ sub.id }}</td>
-          <td>{{ sub.created_at }}</td>
-          <td>{{ sub.mode }}</td>
-          <td>{{ sub.status }}</td>
-          <td>
-            <details>
-              <summary>View text</summary>
-              <pre>{{ sub.extracted_text|e }}</pre>
-              {% if sub.ai_results_json %}
-                <div class="muted">AI Results</div>
-                <pre>{{ sub.ai_results_json|e }}</pre>
-              {% endif %}
-            </details>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <div class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Improve Your Writing Submissions</h1>
+                <p class="page-subtitle">All submissions from the Improve Your Writing feature.</p>
+            </div>
+            <a href="/admin" class="btn"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        </div>
+
+        <div class="table-section">
+            <div class="table-header">
+                <h2 class="table-title">Submissions</h2>
+            </div>
+            {% if submissions %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Created</th>
+                        <th>Mode</th>
+                        <th>Status</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in submissions %}
+                    <tr>
+                        <td data-label="ID">{{ sub.id }}</td>
+                        <td data-label="Created">{{ sub.created_at }}</td>
+                        <td data-label="Mode">
+                            {% if sub.mode == 'after_ai' %}
+                                <span class="badge badge-ai">After AI</span>
+                            {% else %}
+                                <span class="badge badge-human">Human Only</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Status"><span class="badge badge-new">{{ sub.status }}</span></td>
+                        <td data-label="Details">
+                            <details>
+                                <summary>View text</summary>
+                                <pre>{{ sub.extracted_text|e }}</pre>
+                                {% if sub.ai_results_json %}
+                                    <div class="page-subtitle" style="margin-top: 8px;">AI Results</div>
+                                    <pre>{{ sub.ai_results_json|e }}</pre>
+                                {% endif %}
+                            </details>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-inbox" style="font-size: 40px; margin-bottom: 12px;"></i>
+                <p>No submissions yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </body>
 </html>
