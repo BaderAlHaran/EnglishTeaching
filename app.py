@@ -1577,6 +1577,38 @@ def _ensure_improve_jobs_table():
                     warning TEXT
                 )
             ''')
+            cursor.execute('''
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = ?
+            ''', ('improve_jobs',))
+            cols = {row[0] for row in cursor.fetchall()}
+            if 'job_id' not in cols and 'id' in cols:
+                try:
+                    cursor.execute('ALTER TABLE improve_jobs RENAME COLUMN id TO job_id')
+                    cols.remove('id')
+                    cols.add('job_id')
+                except Exception:
+                    pass
+            if 'job_id' not in cols:
+                try:
+                    cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
+                except Exception:
+                    pass
+            for col, col_type in (
+                ('status', 'TEXT'),
+                ('progress', 'INTEGER'),
+                ('message', 'TEXT'),
+                ('result_html', 'TEXT'),
+                ('error', 'TEXT'),
+                ('extracted_text', 'TEXT'),
+                ('warning', 'TEXT')
+            ):
+                if col not in cols:
+                    try:
+                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                    except Exception:
+                        pass
         else:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS improve_jobs (
@@ -1591,6 +1623,34 @@ def _ensure_improve_jobs_table():
                     warning TEXT
                 )
             ''')
+            cursor.execute('PRAGMA table_info(improve_jobs)')
+            cols = {row[1] for row in cursor.fetchall()}
+            if 'job_id' not in cols and 'id' in cols:
+                try:
+                    cursor.execute('ALTER TABLE improve_jobs RENAME COLUMN id TO job_id')
+                except Exception:
+                    pass
+                cursor.execute('PRAGMA table_info(improve_jobs)')
+                cols = {row[1] for row in cursor.fetchall()}
+            if 'job_id' not in cols:
+                try:
+                    cursor.execute('ALTER TABLE improve_jobs ADD COLUMN job_id TEXT')
+                except Exception:
+                    pass
+            for col, col_type in (
+                ('status', 'TEXT'),
+                ('progress', 'INTEGER'),
+                ('message', 'TEXT'),
+                ('result_html', 'TEXT'),
+                ('error', 'TEXT'),
+                ('extracted_text', 'TEXT'),
+                ('warning', 'TEXT')
+            ):
+                if col not in cols:
+                    try:
+                        cursor.execute(f'ALTER TABLE improve_jobs ADD COLUMN {col} {col_type}')
+                    except Exception:
+                        pass
         conn.commit()
     finally:
         conn.close()
