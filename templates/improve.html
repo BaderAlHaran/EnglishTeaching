@@ -257,7 +257,7 @@
                     <form action="/improve/ai" method="post" enctype="multipart/form-data">
                         <div class="form__group">
                             <label class="form__label" for="ai-text">Paste your text</label>
-                            <textarea class="form__textarea" id="ai-text" name="text" placeholder="Paste your text here..."></textarea>
+                            <textarea class="form__textarea" id="ai-text" name="text" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
                         </div>
                         <div class="form__group">
                             <label class="form__label" for="ai-file">Or upload a file (.pdf, .docx)</label>
@@ -307,7 +307,7 @@
                     <form action="/improve/human" method="post" enctype="multipart/form-data">
                         <div class="form__group">
                             <label class="form__label" for="human-text">Paste your text</label>
-                            <textarea class="form__textarea" id="human-text" name="text" placeholder="Paste your text here..."></textarea>
+                            <textarea class="form__textarea" id="human-text" name="text" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
                         </div>
                         <div class="form__group">
                             <label class="form__label" for="human-file">Or upload a file (.pdf, .docx)</label>

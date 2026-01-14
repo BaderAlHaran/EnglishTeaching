@@ -1755,68 +1755,86 @@ def improve():
 
 @app.route('/improve/ai', methods=['POST'])
 def improve_ai():
-    text_input = (request.form.get('text') or '').strip()
-    file = request.files.get('file')
-
     extracted_text = ''
-    if file and file.filename:
-        extracted_text, err = _extract_text_from_upload(file)
-        if err:
+    try:
+        text_input = (request.form.get('text') or '').strip()
+        file = request.files.get('file')
+
+        if file and file.filename:
+            extracted_text, err = _extract_text_from_upload(file)
+            if err:
+                return render_template(
+                    'improve.html',
+                    ai_result=None,
+                    highlighted_text=None,
+                    extracted_text=None,
+                    error=err,
+                    ai_results_json=None,
+                    human_notice=None,
+                    prefill_text=text_input
+                )
+        else:
+            extracted_text = text_input
+
+        if not extracted_text:
             return render_template(
                 'improve.html',
                 ai_result=None,
                 highlighted_text=None,
                 extracted_text=None,
-                error=err,
+                error="Please paste text or upload a file.",
                 ai_results_json=None,
-                human_notice=None
+                human_notice=None,
+                prefill_text=''
             )
-    else:
-        extracted_text = text_input
 
-    if not extracted_text:
+        if len(extracted_text) > IMPROVE_MAX_CHARS:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error="Text is too long. Please submit 50,000 characters or fewer.",
+                ai_results_json=None,
+                human_notice=None,
+                prefill_text=extracted_text
+            )
+
+        ai_result, analysis_error = _run_local_analysis(extracted_text)
+        if analysis_error:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error=analysis_error,
+                ai_results_json=None,
+                human_notice=None,
+                prefill_text=extracted_text
+            )
+        highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
+        return render_template(
+            'improve.html',
+            ai_result=ai_result,
+            highlighted_text=highlighted,
+            extracted_text=extracted_text,
+            error=None,
+            ai_results_json=json.dumps(ai_result),
+            human_notice=None,
+            prefill_text=extracted_text
+        )
+    except Exception:
+        app.logger.exception("Improve AI failed")
         return render_template(
             'improve.html',
             ai_result=None,
             highlighted_text=None,
             extracted_text=None,
-            error="Please paste text or upload a file.",
+            error="AI checker temporarily unavailable. Please use Human Review.",
             ai_results_json=None,
-            human_notice=None
+            human_notice=None,
+            prefill_text=extracted_text
         )
-
-    if len(extracted_text) > IMPROVE_MAX_CHARS:
-        return render_template(
-            'improve.html',
-            ai_result=None,
-            highlighted_text=None,
-            extracted_text=None,
-            error="Text is too long. Please submit 50,000 characters or fewer.",
-            ai_results_json=None,
-            human_notice=None
-        )
-
-    ai_result, analysis_error = _run_local_analysis(extracted_text)
-    if analysis_error:
-        return render_template(
-            'improve.html',
-            ai_result=None,
-            highlighted_text=None,
-            extracted_text=None,
-            error=analysis_error,
-            ai_results_json=None,
-            human_notice=None
-        )
-    highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
-    return render_template(
-        'improve.html',
-        ai_result=ai_result,
-        highlighted_text=highlighted,
-        extracted_text=extracted_text,
-        error=None,
-        ai_results_json=json.dumps(ai_result),
-        human_notice=None
-    )
 
 @app.route('/improve/human', methods=['POST'])
 def improve_human():
