@@ -1469,8 +1469,8 @@ def admin_set_password():
 
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 IMPROVE_MAX_BYTES = 10 * 1024 * 1024
-IMPROVE_MAX_CHARS = 50000
-IMPROVE_MAX_PAGES = 20
+IMPROVE_MAX_CHARS = int(os.environ.get('IMPROVE_MAX_CHARS', '10000'))
+IMPROVE_MAX_PAGES = int(os.environ.get('IMPROVE_MAX_PAGES', '10'))
 IMPROVE_JOB_TIMEOUT_SECONDS = 20
 LT_LANGUAGE = os.environ.get('LT_LANGUAGE', 'en-US')
 LT_PORT = int(os.environ.get('LT_PORT', '8010'))
@@ -1568,6 +1568,7 @@ def _ensure_improve_jobs_table():
                 CREATE TABLE IF NOT EXISTS improve_jobs (
                     job_id TEXT PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status TEXT NOT NULL,
                     progress INTEGER DEFAULT 0,
                     message TEXT,
@@ -1596,6 +1597,7 @@ def _ensure_improve_jobs_table():
                 except Exception:
                     pass
             for col, col_type in (
+                ('updated_at', 'TIMESTAMP'),
                 ('status', 'TEXT'),
                 ('progress', 'INTEGER'),
                 ('message', 'TEXT'),
@@ -1614,6 +1616,7 @@ def _ensure_improve_jobs_table():
                 CREATE TABLE IF NOT EXISTS improve_jobs (
                     job_id TEXT PRIMARY KEY,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     status TEXT NOT NULL,
                     progress INTEGER DEFAULT 0,
                     message TEXT,
@@ -1638,6 +1641,7 @@ def _ensure_improve_jobs_table():
                 except Exception:
                     pass
             for col, col_type in (
+                ('updated_at', 'DATETIME'),
                 ('status', 'TEXT'),
                 ('progress', 'INTEGER'),
                 ('message', 'TEXT'),
@@ -1661,8 +1665,8 @@ def _create_improve_job(extracted_text, warning):
     conn, cursor = _open_db()
     try:
         cursor.execute('''
-            INSERT INTO improve_jobs (job_id, status, progress, message, extracted_text, warning)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO improve_jobs (job_id, status, progress, message, extracted_text, warning, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ''', (job_id, 'queued', 0, 'Queued', extracted_text, warning))
         conn.commit()
     finally:
@@ -1692,6 +1696,7 @@ def _update_improve_job(job_id, status=None, progress=None, message=None, result
         values.append(warning)
     if not fields:
         return
+    fields.append("updated_at = CURRENT_TIMESTAMP")
     values.append(job_id)
     conn, cursor = _open_db()
     try:
@@ -1751,6 +1756,11 @@ def _process_improve_job(job_id, extracted_text, warning):
         _update_improve_job(job_id, progress=value, message=message)
 
     try:
+        if len(extracted_text or '') > IMPROVE_MAX_CHARS:
+            message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
+            app.logger.info("Improve job %s rejected len=%s reason=too_long", job_id, len(extracted_text))
+            _update_improve_job(job_id, status='error', progress=100, error=message, message=message)
+            return
         _update_improve_job(job_id, status='running', progress=5, message='Preparing analysis...', warning=warning)
         ai_result, analysis_error = _run_local_analysis(
             extracted_text,
@@ -1879,6 +1889,8 @@ def improve_ai():
                     human_notice=None,
                     prefill_text=text_input
                 )
+            if warning:
+                app.logger.info("Improve AI truncated PDF to %s pages", IMPROVE_MAX_PAGES)
         else:
             extracted_text = text_input
 
@@ -1895,16 +1907,11 @@ def improve_ai():
             )
 
         if len(extracted_text) > IMPROVE_MAX_CHARS:
-            return render_template(
-                'improve.html',
-                ai_result=None,
-                highlighted_text=None,
-                extracted_text=None,
-                error="Text is too long. Please submit 50,000 characters or fewer.",
-                ai_results_json=None,
-                human_notice=None,
-                prefill_text=extracted_text
-            )
+            message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
+            app.logger.info("Improve AI rejected len=%s reason=too_long", len(extracted_text))
+            job_id = _create_improve_job('', warning)
+            _update_improve_job(job_id, status='error', progress=100, error=message, message=message)
+            return redirect(url_for('improve_progress', job_id=job_id))
 
         job_id = _create_improve_job(extracted_text, warning)
         threading.Thread(
@@ -1969,7 +1976,7 @@ def improve_human():
             ai_result=None,
             highlighted_text=None,
             extracted_text=None,
-            error="Text is too long. Please submit 50,000 characters or fewer.",
+            error="Text is too long. Please submit 10,000 characters or fewer.",
             ai_results_json=None,
             human_notice=None
         )
@@ -2035,7 +2042,7 @@ def improve_status(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = _open_db()
     cursor.execute('''
-        SELECT status, progress, message
+        SELECT status, progress, message, updated_at, error
         FROM improve_jobs
         WHERE job_id = ?
     ''', (job_id,))
@@ -2043,11 +2050,27 @@ def improve_status(job_id):
     conn.close()
     if not row:
         return jsonify({'status': 'error', 'progress': 100, 'message': 'Job not found.'}), 404
-    status, progress, message = row
+    status, progress, message, updated_at, error = row
+    if status == 'running' and updated_at:
+        last_update = updated_at
+        if isinstance(last_update, str):
+            try:
+                last_update = datetime.fromisoformat(last_update)
+            except Exception:
+                last_update = None
+        if isinstance(last_update, datetime):
+            age = (datetime.utcnow() - last_update).total_seconds()
+            if age > 120:
+                stale_message = "The server restarted while processing. Please try again or use Human Review."
+                app.logger.info("Improve job %s marked stale after %ss", job_id, int(age))
+                _update_improve_job(job_id, status='error', progress=100, error=stale_message, message=stale_message)
+                status = 'error'
+                progress = 100
+                message = stale_message
     payload = {
         'status': status,
         'progress': progress or 0,
-        'message': message or ''
+        'message': message or error or ''
     }
     if status == 'done':
         payload['result_url'] = url_for('improve_result', job_id=job_id)
