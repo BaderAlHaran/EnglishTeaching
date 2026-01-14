@@ -1834,7 +1834,8 @@ def _process_improve_job(job_id, extracted_text, warning):
                 combined_warning = analysis_warning
         highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
         result_html = _build_result_html(ai_result, highlighted)
-        _update_improve_job(job_id, status='done', progress=100, result_html=result_html, message='Complete', warning=combined_warning)
+        final_message = combined_warning if combined_warning else 'Complete'
+        _update_improve_job(job_id, status='done', progress=100, result_html=result_html, message=final_message, warning=combined_warning)
     except Exception as exc:
         app.logger.exception("Improve AI background job failed")
         err_msg = str(exc).strip() or "Writing checker failed unexpectedly. Please try again or use Human Review."
@@ -1849,38 +1850,24 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
     global _IMPROVE_NLP
     global _IMPROVE_ALLOWLIST_CACHE
 
-    try:
-        import spacy
-    except Exception as exc:
-        return None, f"NLP engine unavailable: {exc}", None
+    warnings = []
 
-    if _IMPROVE_NLP is None:
-        try:
-            _IMPROVE_NLP = spacy.load('en_core_web_sm', disable=['ner'])
-        except Exception as exc:
-            return None, f"English language model unavailable: {exc}", None
+    if start_time is None:
+        start_time = time.time()
 
-    try:
-        from spellchecker import SpellChecker
-    except Exception as exc:
-        return None, f"Spelling checker unavailable: {exc}", None
+    def _timed_out():
+        return (time.time() - start_time) > timeout_seconds
 
-    try:
-        from proselint.tools import lint as proselint_lint
-    except Exception as exc:
-        proselint_lint = None
-        proselint_error = f"Style checker unavailable: {exc}"
-    else:
-        proselint_error = None
-
-    try:
-        from wordfreq import zipf_frequency
-    except Exception:
-        zipf_frequency = None
+    def _time_guard():
+        if _timed_out():
+            if not warnings or 'partial' not in warnings[-1].lower():
+                warnings.append('Returned partial results due to time limits.')
+            return True
+        return False
 
     if _IMPROVE_ALLOWLIST_CACHE is None:
         allowlist = set(SPELLING_ALLOWLIST)
-        allowlist_path = os.path.join(os.path.dirname(__file__), 'data', 'spelling_allowlist.txt')
+        allowlist_path = os.path.join(os.path.dirname(__file__), 'data', 'allowlist.txt')
         try:
             with open(allowlist_path, 'r', encoding='utf-8') as handle:
                 for line in handle:
@@ -1892,34 +1879,38 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         _IMPROVE_ALLOWLIST_CACHE = {w.lower() for w in allowlist}
 
     allowlist_lower = _IMPROVE_ALLOWLIST_CACHE
-    warning = None
 
-    if start_time is None:
-        start_time = time.time()
+    try:
+        from spellchecker import SpellChecker
+    except Exception as exc:
+        SpellChecker = None
+        warnings.append(f"Spelling checker unavailable: {exc}")
 
-    def _timed_out():
-        return (time.time() - start_time) > timeout_seconds
+    try:
+        from proselint.tools import lint as proselint_lint
+    except Exception as exc:
+        proselint_lint = None
+        warnings.append(f"Style checker unavailable: {exc}")
 
-    def _time_guard():
-        nonlocal warning
-        if _timed_out():
-            if not warning:
-                warning = "Returned partial results due to time limits."
-            return True
-        return False
+    try:
+        from wordfreq import zipf_frequency
+    except Exception:
+        zipf_frequency = None
+
+    nlp = None
+    try:
+        import spacy
+        if _IMPROVE_NLP is None:
+            _IMPROVE_NLP = spacy.load('en_core_web_sm', disable=['ner'])
+        nlp = _IMPROVE_NLP
+    except Exception as exc:
+        warnings.append(f"NLP engine unavailable: {exc}")
+        nlp = None
 
     issues = []
 
     if progress_cb:
         progress_cb(8, "Preparing checks...")
-
-    try:
-        doc = _IMPROVE_NLP(text)
-    except Exception as exc:
-        return None, f"NLP processing failed: {exc}", None
-
-    if _time_guard():
-        doc = doc
 
     email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
     url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
@@ -1932,20 +1923,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 return True
         return False
 
-    sentences = []
-    for sent in doc.sents:
-        segment = sent.text
-        if segment.strip():
-            sentences.append({
-                'id': len(sentences) + 1,
-                'start': sent.start_char,
-                'end': sent.end_char,
-                'text': segment.strip()
-            })
-
-    sentence_flags = {s['id']: set() for s in sentences}
-
-    def _sentence_id_for_span(start, end):
+    def _sentence_id_for_span(start, end, sentences):
         for s in sentences:
             if start >= s['start'] and end <= s['end']:
                 return s['id']
@@ -1956,171 +1934,257 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             return
         if start < 0 or end <= start or start > len(text):
             return
-        sid = sentence_id if sentence_id is not None else _sentence_id_for_span(start, end)
-        if flag and sid is not None:
-            sentence_flags.setdefault(sid, set()).add(flag)
         issues.append({
             'start': start,
             'end': end,
             'kind': kind,
             'message': message,
             'suggestions': suggestions or [],
-            'sentence_id': sid,
+            'sentence_id': sentence_id,
             'no_highlight': no_highlight,
             'is_rewrite': is_rewrite
         })
 
-    if progress_cb:
-        progress_cb(18, "Checking grammar...")
+    if nlp is not None:
+        try:
+            doc = nlp(text)
+        except Exception as exc:
+            doc = None
+            warnings.append(f"NLP processing failed: {exc}")
+    else:
+        doc = None
 
-    comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
-    greetings = {'hi', 'hello', 'dear'}
-    obj_pronouns = {'me', 'him', 'her', 'us', 'them'}
-    subj_pronouns = {'i', 'he', 'she', 'we', 'they'}
-    determiners = {'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
-    count_nouns = {
-        'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
-        'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
-        'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
-    }
+    sentences = []
+    sentence_flags = {}
 
-    def _token_number(token):
-        numbers = token.morph.get('Number')
-        if numbers:
-            return numbers[0]
-        if token.lower_ in {'he', 'she', 'it', 'this', 'that', 'someone', 'everybody'}:
-            return 'Sing'
-        if token.lower_ in {'they', 'we', 'you'}:
-            return 'Plur'
-        return None
+    if doc is not None:
+        for sent in doc.sents:
+            segment = sent.text
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': sent.start_char,
+                    'end': sent.end_char,
+                    'text': segment.strip()
+                })
+        sentence_flags = {s['id']: set() for s in sentences}
 
-    def _verb_number(token):
-        numbers = token.morph.get('Number')
-        if numbers:
-            return numbers[0]
-        if token.tag_ == 'VBZ':
-            return 'Sing'
-        if token.tag_ == 'VBP':
-            return 'Plur'
-        return None
+        if progress_cb:
+            progress_cb(18, "Checking grammar...")
 
-    for token in doc:
-        if _time_guard():
-            break
-        if token.is_space or token.is_punct:
-            continue
-        if _overlaps_ignored(token.idx, token.idx + len(token.text)):
-            continue
+        comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
+        greetings = {'hi', 'hello', 'dear'}
+        obj_pronouns = {'me', 'him', 'her', 'us', 'them'}
+        subj_pronouns = {'i', 'he', 'she', 'we', 'they'}
+        determiners = {'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
+        count_nouns = {
+            'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
+            'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
+            'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
+        }
 
-        if token.pos_ == 'PROPN' and token.text and token.text[0].islower() and not token.text.isupper():
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], flag='proper_noun')
+        def _token_number(token):
+            numbers = token.morph.get('Number')
+            if numbers:
+                return numbers[0]
+            if token.lower_ in {'he', 'she', 'it', 'this', 'that', 'someone', 'everybody'}:
+                return 'Sing'
+            if token.lower_ in {'they', 'we', 'you'}:
+                return 'Plur'
+            return None
 
-        if token.lower_ in allowlist_lower and token.text and token.text[0].islower() and not token.text.isupper():
-            proper = token.text.capitalize()
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], flag='proper_noun')
+        def _verb_number(token):
+            numbers = token.morph.get('Number')
+            if numbers:
+                return numbers[0]
+            if token.tag_ == 'VBZ':
+                return 'Sing'
+            if token.tag_ == 'VBP':
+                return 'Plur'
+            return None
 
-        if token.dep_ in {'nsubj', 'nsubjpass'} and token.head.pos_ in {'VERB', 'AUX'}:
-            subj_num = _token_number(token)
-            verb_num = _verb_number(token.head)
-            if subj_num and verb_num and subj_num != verb_num:
-                _add_issue(token.head.idx, token.head.idx + len(token.head.text), 'grammar', 'Subject and verb may not agree.', [])
+        for token in doc:
+            if _time_guard():
+                break
+            if token.is_space or token.is_punct:
+                continue
+            if _overlaps_ignored(token.idx, token.idx + len(token.text)):
+                continue
 
-        if token.pos_ == 'NOUN' and token.tag_ == 'NN' and token.lemma_.lower() in count_nouns:
-            has_det = any(child.dep_ in {'det', 'poss'} for child in token.children)
+            if token.pos_ == 'PROPN' and token.text and token.text[0].islower() and not token.text.isupper():
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [token.text.capitalize()], flag='proper_noun', sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+
+            if token.lower_ in allowlist_lower and token.text and token.text[0].islower() and not token.text.isupper():
+                proper = token.text.capitalize()
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Proper noun should be capitalized.', [proper], flag='proper_noun', sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+
+            if token.dep_ in {'nsubj', 'nsubjpass'} and token.head.pos_ in {'VERB', 'AUX'}:
+                subj_num = _token_number(token)
+                verb_num = _verb_number(token.head)
+                if subj_num and verb_num and subj_num != verb_num:
+                    _add_issue(token.head.idx, token.head.idx + len(token.head.text), 'grammar', 'Subject and verb may not agree.', [], sentence_id=_sentence_id_for_span(token.head.idx, token.head.idx + len(token.head.text), sentences))
+
+            if token.pos_ == 'NOUN' and token.tag_ == 'NN' and token.lemma_.lower() in count_nouns:
+                has_det = any(child.dep_ in {'det', 'poss'} for child in token.children)
+                prev_token = token.nbor(-1) if token.i > 0 else None
+                prev_det = prev_token is not None and prev_token.lower_ in determiners
+                if not has_det and not prev_det:
+                    suggestion = 'a'
+                    if token.text and token.text[0].lower() in 'aeiou':
+                        suggestion = 'an'
+                    _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Missing article before singular noun.', [suggestion, 'the'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+
+            if token.lower_ in obj_pronouns and token.dep_ in {'nsubj', 'nsubjpass'}:
+                subj_map = {'me': 'I', 'him': 'he', 'her': 'she', 'us': 'we', 'them': 'they'}
+                suggestion = subj_map.get(token.lower_, '')
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use subject pronoun in this position.', [suggestion] if suggestion else [], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+
+            if token.lower_ in subj_pronouns and token.dep_ in {'dobj', 'pobj', 'obj', 'iobj'}:
+                obj_map = {'i': 'me', 'he': 'him', 'she': 'her', 'we': 'us', 'they': 'them'}
+                suggestion = obj_map.get(token.lower_, '')
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use object pronoun in this position.', [suggestion] if suggestion else [], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
+
+            next_token = token.nbor(1) if token.i + 1 < len(doc) else None
             prev_token = token.nbor(-1) if token.i > 0 else None
-            prev_det = prev_token is not None and prev_token.lower_ in determiners
-            if not has_det and not prev_det:
-                suggestion = 'a'
-                if token.text and token.text[0].lower() in 'aeiou':
-                    suggestion = 'an'
-                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Missing article before singular noun.', [suggestion, 'the'])
 
-        if token.lower_ in obj_pronouns and token.dep_ in {'nsubj', 'nsubjpass'}:
-            subj_map = {'me': 'I', 'him': 'he', 'her': 'she', 'us': 'we', 'them': 'they'}
-            suggestion = subj_map.get(token.lower_, '')
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use subject pronoun in this position.', [suggestion] if suggestion else [])
+            if token.lower_ == 'your' and next_token and next_token.lower_ in {'are', 'were'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', "Did you mean \"you're\"?", ["you're"], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ in subj_pronouns and token.dep_ in {'dobj', 'pobj', 'obj', 'iobj'}:
-            obj_map = {'i': 'me', 'he': 'him', 'she': 'her', 'we': 'us', 'they': 'them'}
-            suggestion = obj_map.get(token.lower_, '')
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use object pronoun in this position.', [suggestion] if suggestion else [])
+            if token.lower_ == "you're" and next_token and next_token.pos_ in {'NOUN', 'PROPN', 'ADJ'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "your"?', ['your'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        next_token = token.nbor(1) if token.i + 1 < len(doc) else None
-        prev_token = token.nbor(-1) if token.i > 0 else None
+            if token.lower_ == 'their' and next_token and next_token.lower_ in {'is', 'are', 'was', 'were'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "there"?', ['there'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == 'your' and next_token and next_token.lower_ in {'are', 'were'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', "Did you mean \"you're\"?", ["you're"])
+            if token.lower_ == 'there' and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "their"?', ['their'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == "you're" and next_token and next_token.pos_ in {'NOUN', 'PROPN', 'ADJ'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "your"?', ['your'])
+            if token.lower_ == "they're" and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "their"?', ['their'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == 'their' and next_token and next_token.lower_ in {'is', 'are', 'was', 'were'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "there"?', ['there'])
+            if token.lower_ == 'its' and next_token and next_token.lower_ in {'is', 'was', 'has'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', "Did you mean \"it's\"?", ["it's"], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == 'there' and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "their"?', ['their'])
+            if token.lower_ == "it's" and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "its"?', ['its'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == "they're" and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "their"?', ['their'])
+            if token.lower_ == 'then' and prev_token and prev_token.lower_ in comparatives:
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "than" for comparisons.', ['than'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == 'its' and next_token and next_token.lower_ in {'is', 'was', 'has'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', "Did you mean \"it's\"?", ["it's"])
+            if token.lower_ == 'effect' and prev_token and prev_token.lower_ == 'to':
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "affect" as a verb.', ['affect'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == "it's" and next_token and next_token.pos_ in {'NOUN', 'PROPN'}:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Did you mean "its"?', ['its'])
+            if token.lower_ == 'affect' and prev_token and prev_token.lower_ == 'the':
+                _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "effect" as a noun.', ['effect'], sentence_id=_sentence_id_for_span(token.idx, token.idx + len(token.text), sentences))
 
-        if token.lower_ == 'then' and prev_token and prev_token.lower_ in comparatives:
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "than" for comparisons.', ['than'])
+        if progress_cb:
+            progress_cb(32, "Checking sentence rules...")
 
-        if token.lower_ == 'effect' and prev_token and prev_token.lower_ == 'to':
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "affect" as a verb.', ['affect'])
+        for sent in doc.sents:
+            if _time_guard():
+                break
+            sent_text = sent.text
+            sent_id = _sentence_id_for_span(sent.start_char, sent.end_char, sentences)
+            if not sent_text.strip():
+                continue
+            sent_tokens = [t for t in sent if not t.is_space]
+            if len(sent_tokens) < 2:
+                continue
 
-        if token.lower_ == 'affect' and prev_token and prev_token.lower_ == 'the':
-            _add_issue(token.idx, token.idx + len(token.text), 'grammar', 'Use "effect" as a noun.', ['effect'])
+            first_alpha = re.search(r'[A-Za-z]', sent_text)
+            if first_alpha:
+                pos = sent.start_char + first_alpha.start()
+                if text[pos:pos + 1].islower():
+                    sentence_flags.setdefault(sent_id, set()).add('capitalization')
+                    _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], sentence_id=sent_id)
 
-    if progress_cb:
-        progress_cb(32, "Checking sentence rules...")
+            stripped = sent_text.rstrip()
+            if stripped and stripped[-1] not in '.!?':
+                end_pos = sent.start_char + len(stripped)
+                if end_pos > sent.start_char:
+                    sentence_flags.setdefault(sent_id, set()).add('end_punctuation')
+                    _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], sentence_id=sent_id)
 
-    for sent in doc.sents:
-        if _time_guard():
-            break
-        sent_text = sent.text
-        sent_id = _sentence_id_for_span(sent.start_char, sent.end_char)
-        if not sent_text.strip():
-            continue
-        sent_tokens = [t for t in sent if not t.is_space]
-        if len(sent_tokens) < 2:
-            continue
+            first = sent_tokens[0].lower_
+            if first in greetings and len(sent_tokens) >= 2:
+                name_token = sent_tokens[1]
+                if name_token.pos_ == 'PROPN' or name_token.text.rstrip('.') in {'Mr', 'Ms', 'Mrs', 'Dr'}:
+                    next_char_index = name_token.idx + len(name_token.text)
+                    if next_char_index < len(text) and text[next_char_index] != ',':
+                        _add_issue(name_token.idx, name_token.idx + len(name_token.text), 'grammar', 'Add a comma after the greeting name.', [','], sentence_id=sent_id)
 
-        first_alpha = re.search(r'[A-Za-z]', sent_text)
-        if first_alpha:
-            pos = sent.start_char + first_alpha.start()
-            if text[pos:pos + 1].islower():
-                _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], flag='capitalization', sentence_id=sent_id)
+            conj_tokens = [t for t in sent_tokens if t.lower_ in {'and', 'but', 'so'}]
+            verb_roots = [t for t in sent_tokens if t.dep_ in {'ROOT', 'conj'} and t.pos_ in {'VERB', 'AUX'}]
+            if len(verb_roots) >= 2 and conj_tokens:
+                if ',' not in sent_text and ';' not in sent_text:
+                    conj = conj_tokens[0]
+                    sentence_flags.setdefault(sent_id, set()).add('run_on')
+                    _add_issue(conj.idx, conj.idx + len(conj.text), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], sentence_id=sent_id)
 
-        stripped = sent_text.rstrip()
-        if stripped and stripped[-1] not in '.!?':
-            end_pos = sent.start_char + len(stripped)
-            if end_pos > sent.start_char:
-                _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], flag='end_punctuation', sentence_id=sent_id)
+        if progress_cb:
+            progress_cb(48, "Checking mechanics...")
+    else:
+        s_start = 0
+        for match in re.finditer(r'[.!?]+', text):
+            s_end = match.end()
+            segment = text[s_start:s_end]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': s_start,
+                    'end': s_end,
+                    'text': segment.strip()
+                })
+            s_start = s_end
+        if s_start < len(text):
+            segment = text[s_start:]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': s_start,
+                    'end': len(text),
+                    'text': segment.strip()
+                })
+        sentence_flags = {s['id']: set() for s in sentences}
+        if progress_cb:
+            progress_cb(18, "Checking grammar...")
 
-        first = sent_tokens[0].lower_
-        if first in greetings and len(sent_tokens) >= 2:
-            name_token = sent_tokens[1]
-            if name_token.pos_ == 'PROPN' or name_token.text.rstrip('.') in {'Mr', 'Ms', 'Mrs', 'Dr'}:
-                next_char_index = name_token.idx + len(name_token.text)
-                if next_char_index < len(text) and text[next_char_index] != ',':
-                    _add_issue(name_token.idx, name_token.idx + len(name_token.text), 'grammar', 'Add a comma after the greeting name.', [','], sentence_id=sent_id)
+        for sentence in sentences:
+            if _time_guard():
+                break
+            sent_text = text[sentence['start']:sentence['end']]
+            sent_id = sentence['id']
+            words = list(re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", sent_text))
+            if len(words) < 2:
+                continue
 
-        conj_tokens = [t for t in sent_tokens if t.lower_ in {'and', 'but', 'so'}]
-        verb_roots = [t for t in sent_tokens if t.dep_ in {'ROOT', 'conj'} and t.pos_ in {'VERB', 'AUX'}]
-        if len(verb_roots) >= 2 and conj_tokens:
-            if ',' not in sent_text and ';' not in sent_text:
-                conj = conj_tokens[0]
-                _add_issue(conj.idx, conj.idx + len(conj.text), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], flag='run_on', sentence_id=sent_id)
+            first_alpha = re.search(r'[A-Za-z]', sent_text)
+            if first_alpha:
+                pos = sentence['start'] + first_alpha.start()
+                if text[pos:pos + 1].islower():
+                    sentence_flags.setdefault(sent_id, set()).add('capitalization')
+                    _add_issue(pos, pos + 1, 'grammar', 'Capitalize the start of the sentence.', [], sentence_id=sent_id)
 
-    if progress_cb:
-        progress_cb(48, "Checking mechanics...")
+            stripped = sent_text.rstrip()
+            if stripped and stripped[-1] not in '.!?':
+                end_pos = sentence['start'] + len(stripped)
+                if end_pos > sentence['start']:
+                    sentence_flags.setdefault(sent_id, set()).add('end_punctuation')
+                    _add_issue(end_pos - 1, end_pos, 'grammar', 'Add ending punctuation.', ['.'], sentence_id=sent_id)
+
+            for match in words:
+                word = match.group(0)
+                lower = word.lower()
+                if lower in allowlist_lower and word and word[0].islower():
+                    sentence_flags.setdefault(sent_id, set()).add('proper_noun')
+                    _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Proper noun should be capitalized.', [word.capitalize()], sentence_id=sent_id)
+
+            if len(words) > 12 and ',' not in sent_text:
+                if re.search(r'\b(and|but|so)\b', sent_text, flags=re.IGNORECASE):
+                    sentence_flags.setdefault(sent_id, set()).add('run_on')
+                    conj_match = re.search(r'\b(and|but|so)\b', sent_text, flags=re.IGNORECASE)
+                    if conj_match:
+                        _add_issue(sentence['start'] + conj_match.start(), sentence['start'] + conj_match.end(), 'grammar', 'Possible run-on sentence; consider a comma or split it.', [], sentence_id=sent_id)
 
     for match in re.finditer(r' {2,}', text):
         if _time_guard():
@@ -2137,63 +2201,99 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             break
         _add_issue(match.start(1), match.start(2) + 1, 'grammar', 'Add a space after punctuation.', [])
 
-    prev_word = None
-    for token in doc:
-        if _time_guard():
-            break
-        if token.is_space or token.is_punct:
-            continue
-        if _overlaps_ignored(token.idx, token.idx + len(token.text)):
-            continue
-        if prev_word and prev_word == token.lower_:
-            _add_issue(token.idx, token.idx + len(token.text), 'style', 'Repeated word.', [])
-        prev_word = token.lower_
+    def _is_code_like(word):
+        return any(sym in word for sym in ('_', '/', '\\', '::', '->', '=>', '()'))
+
+    if doc is not None:
+        prev_word = None
+        for token in doc:
+            if _time_guard():
+                break
+            if token.is_space or token.is_punct:
+                continue
+            if _overlaps_ignored(token.idx, token.idx + len(token.text)):
+                continue
+            if prev_word and prev_word == token.lower_:
+                _add_issue(token.idx, token.idx + len(token.text), 'style', 'Repeated word.', [])
+            prev_word = token.lower_
+    else:
+        prev_word = None
+        for match in re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", text):
+            if _time_guard():
+                break
+            word = match.group(0)
+            if _overlaps_ignored(match.start(), match.end()):
+                continue
+            lower = word.lower()
+            if prev_word and prev_word == lower:
+                _add_issue(match.start(), match.end(), 'style', 'Repeated word.', [])
+            prev_word = lower
 
     if progress_cb:
         progress_cb(60, "Checking spelling...")
 
-    spell = SpellChecker()
-    spell.word_frequency.load_words(list(allowlist_lower))
-    total_tokens = max(1, len(doc))
-    for idx, token in enumerate(doc):
-        if _time_guard():
-            break
-        if token.is_space or token.is_punct:
-            continue
-        if token.like_url or token.like_email:
-            continue
-        if token.pos_ == 'PROPN':
-            continue
-        if token.text.isupper() and len(token.text) > 1:
-            continue
-        if any(ch.isdigit() for ch in token.text):
-            continue
-        if '-' in token.text:
-            continue
-        if token.text[0].isupper():
-            continue
-        lower = token.text.lower()
-        if lower in allowlist_lower:
-            continue
-        if zipf_frequency and zipf_frequency(lower, 'en') >= 4.5:
-            continue
-        try:
-            unknown = lower in spell.unknown([lower])
-        except Exception:
-            app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
-            continue
-        if not unknown:
-            continue
-        try:
-            cand = spell.candidates(lower) or []
-            candidates = list(cand)
-        except Exception:
-            app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
-            continue
-        suggestions = [c for c in candidates if c != lower][:3]
-        _add_issue(token.idx, token.idx + len(token.text), 'spelling', 'Possible spelling mistake.', suggestions)
-        if progress_cb and idx % 80 == 0:
-            progress_cb(60 + int(15 * idx / total_tokens), "Checking spelling...")
+    if SpellChecker:
+        spell = SpellChecker()
+        spell.word_frequency.load_words(list(allowlist_lower))
+        tokens_for_spell = doc if doc is not None else []
+        if doc is None:
+            tokens_for_spell = []
+            for match in re.finditer(r"[^\W\d_]+(?:'[^\W\d_]+)?", text):
+                tokens_for_spell.append(match)
+        total_tokens = max(1, len(tokens_for_spell))
+        for idx, token in enumerate(tokens_for_spell):
+            if _time_guard():
+                break
+            if doc is not None:
+                word = token.text
+                start = token.idx
+                end = token.idx + len(token.text)
+                if token.is_space or token.is_punct:
+                    continue
+                if token.like_url or token.like_email:
+                    continue
+                if token.pos_ == 'PROPN':
+                    continue
+            else:
+                word = token.group(0)
+                start = token.start()
+                end = token.end()
+                if _overlaps_ignored(start, end):
+                    continue
+            if not word:
+                continue
+            if word.isupper() and len(word) > 1:
+                continue
+            if any(ch.isdigit() for ch in word):
+                continue
+            if _is_code_like(word):
+                continue
+            if '-' in word:
+                continue
+            if word[0].isupper():
+                continue
+            lower = word.lower()
+            if lower in allowlist_lower:
+                continue
+            if zipf_frequency and zipf_frequency(lower, 'en') >= 4.5:
+                continue
+            try:
+                unknown = lower in spell.unknown([lower])
+            except Exception:
+                app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
+                continue
+            if not unknown:
+                continue
+            try:
+                cand = spell.candidates(lower) or []
+                candidates = list(cand)
+            except Exception:
+                app.logger.info("Spellcheck skip len=%s reason=candidates_error", len(lower))
+                continue
+            suggestions = [c for c in candidates if c != lower][:3]
+            _add_issue(start, end, 'spelling', 'Possible spelling mistake.', suggestions)
+            if progress_cb and idx % 80 == 0:
+                progress_cb(60 + int(15 * idx / total_tokens), "Checking spelling...")
 
     if progress_cb:
         progress_cb(78, "Checking style...")
@@ -2217,8 +2317,6 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             if not any(key in msg_lower for key in ('capitalize', 'punctuation', 'comma', 'period', 'a/an', 'article', 'agreement', 'subject')):
                 continue
             _add_issue(start, end, 'style', message, [])
-    elif proselint_error and not warning:
-        warning = "Used basic checker due to resource limits."
 
     def _apply_proper_nouns(sentence_text):
         updated = sentence_text
@@ -2257,7 +2355,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         return None
 
     for sentence in sentences:
-        flags = sentence_flags.get(sentence['id'], set())
+        sid = sentence.get('id')
+        flags = sentence_flags.get(sid, set())
         key_flags = {'capitalization', 'end_punctuation', 'proper_noun'}
         if len(flags.intersection(key_flags)) >= 2:
             original = sentence.get('text') or ''
@@ -2267,7 +2366,7 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
                 suggestion = _capitalize_first(suggestion.strip())
                 suggestion = _ensure_end_punct(suggestion)
             if suggestion and suggestion.strip() and suggestion.strip() != original.strip():
-                _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sentence['id'], is_rewrite=True)
+                _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
 
     def _dedupe_issues(items):
         seen = set()
@@ -2298,6 +2397,8 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         'grammar': sum(1 for i in issues if i['kind'] == 'grammar' and not i.get('no_highlight')),
         'style': sum(1 for i in issues if i['kind'] == 'style' and not i.get('no_highlight') and not i.get('is_rewrite'))
     }
+
+    warning = '; '.join(warnings) if warnings else None
     return {'issues': issues, 'summary': summary, 'sentences': sentences}, None, warning
 def _build_highlighted_html(text, issues):
     if not issues:
