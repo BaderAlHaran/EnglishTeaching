@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing - Improve Your Writing</title>
+    <meta name="description" content="Processing your Improve Your Writing request.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+
+    <style>
+        .improve-hero {
+            padding: calc(70px + var(--space-24)) 0 var(--space-12);
+            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            text-align: center;
+        }
+        .improve-hero__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-4xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+        .improve-section {
+            padding: var(--space-20) 0 var(--space-24);
+            background: var(--background-secondary);
+        }
+        .improve-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-10);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .improve-progress {
+            height: 12px;
+            background: var(--gray-200);
+            border-radius: var(--radius-full);
+            overflow: hidden;
+        }
+        .improve-progress__bar {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--accent-color), var(--accent-light));
+            transition: width 0.3s ease;
+        }
+        .improve-status {
+            margin-top: var(--space-4);
+            color: var(--text-secondary);
+        }
+        .improve-actions {
+            display: flex;
+            gap: var(--space-4);
+            margin-top: var(--space-6);
+            flex-wrap: wrap;
+        }
+        .improve-spinner {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 3px solid var(--gray-200);
+            border-top-color: var(--accent-color);
+            animation: spin 1s linear infinite;
+            margin: 0 auto var(--space-4);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <h1 class="nav__logo">English Essay Writing</h1>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="/" class="nav__link">Home</a></li>
+                <li class="nav__item"><a href="/#services" class="nav__link">Services</a></li>
+                <li class="nav__item"><a href="/#process" class="nav__link">Process</a></li>
+                <li class="nav__item"><a href="/improve" class="nav__link active">Improve Writing</a></li>
+                <li class="nav__item"><a href="/about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="/contact" class="nav__link">Contact</a></li>
+                <li class="nav__item"><a href="/faq" class="nav__link">FAQ</a></li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <section class="improve-hero">
+        <div class="container">
+            <h2 class="improve-hero__title">Processing Your Request</h2>
+            <p class="section__description">We are analyzing your text. This usually finishes quickly.</p>
+        </div>
+    </section>
+
+    <section class="improve-section">
+        <div class="container">
+            <div class="improve-card">
+                <div class="improve-spinner"></div>
+                <div class="improve-progress" aria-label="Progress">
+                    <div class="improve-progress__bar" id="progressBar"></div>
+                </div>
+                <div class="improve-status" id="statusText">Queued...</div>
+                <div class="improve-actions">
+                    <a href="/improve" class="btn btn--secondary">Back</a>
+                    <a href="/improve" class="btn btn--primary">Start Over</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>norakalmutairi@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copy">&copy; 2026 English Essay Writing. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/script.js" defer></script>
+    <script>
+        const jobId = "{{ job_id }}";
+        const statusText = document.getElementById('statusText');
+        const progressBar = document.getElementById('progressBar');
+
+        async function pollStatus() {
+            try {
+                const res = await fetch(`/improve/status/${jobId}`);
+                const data = await res.json();
+                if (data.progress !== undefined) {
+                    progressBar.style.width = `${data.progress}%`;
+                }
+                if (data.message) {
+                    statusText.textContent = data.message;
+                }
+                if (data.status === 'done' && data.result_url) {
+                    window.location.href = data.result_url;
+                    return;
+                }
+                if (data.status === 'error') {
+                    statusText.textContent = data.message || 'Processing failed.';
+                }
+            } catch (e) {
+                statusText.textContent = 'Still working...';
+            }
+        }
+
+        pollStatus();
+        setInterval(pollStatus, 1000);
+    </script>
+</body>
+</html>

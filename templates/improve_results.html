@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Improve Results - English Essay Writing</title>
+    <meta name="description" content="Improve Your Writing results.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+
+    <style>
+        .improve-hero {
+            padding: calc(70px + var(--space-24)) 0 var(--space-12);
+            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            text-align: center;
+        }
+        .improve-hero__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-4xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+        .improve-section {
+            padding: var(--space-20) 0 var(--space-24);
+            background: var(--background-secondary);
+        }
+        .improve-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-10);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        .improve-legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-full);
+            font-size: var(--fs-sm);
+            background: var(--gray-100);
+        }
+        .improve-legend-swatch {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .improve-highlight {
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            background: var(--white);
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.7;
+        }
+        .improve-issue-spelling {
+            text-decoration: underline;
+            text-decoration-color: #dc2626;
+            text-decoration-thickness: 2px;
+        }
+        .improve-issue-grammar {
+            text-decoration: underline;
+            text-decoration-color: #f59e0b;
+            text-decoration-thickness: 2px;
+        }
+        .improve-issue-style {
+            text-decoration: underline;
+            text-decoration-color: #2563eb;
+            text-decoration-thickness: 2px;
+        }
+        .improve-issues {
+            margin-top: var(--space-6);
+            display: grid;
+            gap: var(--space-3);
+        }
+        .improve-issues li {
+            background: var(--gray-100);
+            border-radius: var(--radius-md);
+            padding: var(--space-3) var(--space-4);
+        }
+        .improve-issues__kind {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-weight: 600;
+            margin-right: var(--space-2);
+        }
+        .improve-issues__kind-spelling { color: #b91c1c; }
+        .improve-issues__kind-grammar { color: #b45309; }
+        .improve-issues__kind-style { color: #1d4ed8; }
+        .improve-issues__suggestions {
+            display: block;
+            color: var(--text-secondary);
+            margin-top: var(--space-2);
+            font-size: var(--fs-sm);
+        }
+        .improve-alert {
+            margin-bottom: var(--space-6);
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+            background: #fff7ed;
+            color: #9a3412;
+            border: 1px solid #fed7aa;
+        }
+        .improve-actions {
+            margin-top: var(--space-8);
+            display: flex;
+            gap: var(--space-4);
+            flex-wrap: wrap;
+        }
+        .improve-hidden { display: none; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <h1 class="nav__logo">English Essay Writing</h1>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="/" class="nav__link">Home</a></li>
+                <li class="nav__item"><a href="/#services" class="nav__link">Services</a></li>
+                <li class="nav__item"><a href="/#process" class="nav__link">Process</a></li>
+                <li class="nav__item"><a href="/improve" class="nav__link active">Improve Writing</a></li>
+                <li class="nav__item"><a href="/about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="/contact" class="nav__link">Contact</a></li>
+                <li class="nav__item"><a href="/faq" class="nav__link">FAQ</a></li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <section class="improve-hero">
+        <div class="container">
+            <h2 class="improve-hero__title">Improve Your Writing Results</h2>
+            <p class="section__description">Here is your AI feedback summary.</p>
+        </div>
+    </section>
+
+    <section class="improve-section">
+        <div class="container">
+            <div class="improve-card">
+                {% if warning %}
+                <div class="improve-alert">{{ warning }}</div>
+                {% endif %}
+
+                {% if ai_result %}
+                <div class="improve-legend">
+                    <span><span class="improve-legend-swatch" style="background:#dc2626"></span> Spelling ({{ ai_result.summary.spelling }})</span>
+                    <span><span class="improve-legend-swatch" style="background:#f59e0b"></span> Grammar ({{ ai_result.summary.grammar }})</span>
+                    <span><span class="improve-legend-swatch" style="background:#2563eb"></span> Style ({{ ai_result.summary.style }})</span>
+                </div>
+
+                <h4 class="section__title" style="font-size: var(--fs-2xl); margin-bottom: var(--space-4);">Highlighted Text</h4>
+                <div class="improve-highlight">{{ highlighted_text|safe }}</div>
+
+                <h4 class="section__title" style="font-size: var(--fs-2xl); margin: var(--space-6) 0 var(--space-3);">Issues</h4>
+                {% if ai_result.issues %}
+                <ul class="improve-issues">
+                    {% for issue in ai_result.issues %}
+                    <li>
+                        <span class="improve-issues__kind improve-issues__kind-{{ issue.kind }}">{{ issue.kind|replace('_', ' ')|title }}</span>
+                        <span class="improve-issues__message">{{ issue.message }}</span>
+                        {% if issue.suggestions %}
+                        <span class="improve-issues__suggestions">Suggestions: {{ issue.suggestions|join(', ') }}</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="form__help">No issues detected.</p>
+                {% endif %}
+
+                <form action="/improve/human" method="post" style="margin-top: var(--space-6);">
+                    <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
+                    <textarea class="improve-hidden" name="ai_results_json">{{ ai_result|tojson|e }}</textarea>
+                    <div class="improve-actions">
+                        <button class="btn btn--primary" type="submit">Send to Human for Correction</button>
+                        <a href="/improve" class="btn btn--secondary">Start Over</a>
+                    </div>
+                </form>
+                {% else %}
+                <p class="form__help">No results available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>norakalmutairi@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copy">&copy; 2026 English Essay Writing. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/script.js" defer></script>
+</body>
+</html>

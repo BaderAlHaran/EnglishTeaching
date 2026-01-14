@@ -1470,6 +1470,8 @@ def admin_set_password():
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 IMPROVE_MAX_BYTES = 10 * 1024 * 1024
 IMPROVE_MAX_CHARS = 50000
+IMPROVE_MAX_PAGES = 20
+IMPROVE_JOB_TIMEOUT_SECONDS = 20
 
 def _ensure_submissions_table():
     conn, cursor = _open_db()
@@ -1513,43 +1515,157 @@ def _read_upload_bytes(file_storage):
 def _extract_text_from_upload(file_storage):
     filename = (file_storage.filename or '').strip()
     if '.' not in filename:
-        return None, "File must have a .pdf or .docx extension."
+        return None, "File must have a .pdf or .docx extension.", None
     ext = filename.rsplit('.', 1)[1].lower()
     if ext not in IMPROVE_ALLOWED_EXTENSIONS:
-        return None, "Unsupported file type. Only PDF and DOCX are allowed."
+        return None, "Unsupported file type. Only PDF and DOCX are allowed.", None
 
     data, err = _read_upload_bytes(file_storage)
     if err:
-        return None, err
+        return None, err, None
+
+    warning = None
 
     if ext == 'pdf':
         try:
             import pypdf
         except Exception:
-            return None, "PDF support is unavailable. Please install pypdf."
+            return None, "PDF support is unavailable. Please install pypdf.", None
         reader = pypdf.PdfReader(io.BytesIO(data))
+        pages = reader.pages or []
+        if len(pages) > IMPROVE_MAX_PAGES:
+            warning = f"This document is long; we analyzed the first {IMPROVE_MAX_PAGES} pages. You may upload a shorter section."
+            pages = pages[:IMPROVE_MAX_PAGES]
         parts = []
-        for page in reader.pages:
+        for page in pages:
             try:
                 parts.append(page.extract_text() or '')
             except Exception:
                 parts.append('')
         text = "\n".join(parts).strip()
         if not text:
-            return None, "No text could be extracted from the PDF."
-        return text, None
+            return None, "No text could be extracted from the PDF.", None
+        return text, None, warning
 
     try:
         import docx
     except Exception:
-        return None, "DOCX support is unavailable. Please install python-docx."
+        return None, "DOCX support is unavailable. Please install python-docx.", None
     document = docx.Document(io.BytesIO(data))
     text = "\n".join(p.text for p in document.paragraphs).strip()
     if not text:
-        return None, "No text could be extracted from the DOCX."
-    return text, None
+        return None, "No text could be extracted from the DOCX.", None
+    return text, None, warning
 
-def _run_local_analysis(text):
+def _ensure_improve_jobs_table():
+    conn, cursor = _open_db()
+    try:
+        if _is_postgres():
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS improve_jobs (
+                    id TEXT PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT NOT NULL,
+                    progress INTEGER DEFAULT 0,
+                    message TEXT,
+                    extracted_text TEXT,
+                    ai_results_json TEXT,
+                    error TEXT,
+                    warning TEXT
+                )
+            ''')
+        else:
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS improve_jobs (
+                    id TEXT PRIMARY KEY,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT NOT NULL,
+                    progress INTEGER DEFAULT 0,
+                    message TEXT,
+                    extracted_text TEXT,
+                    ai_results_json TEXT,
+                    error TEXT,
+                    warning TEXT
+                )
+            ''')
+        conn.commit()
+    finally:
+        conn.close()
+
+def _create_improve_job(extracted_text, warning):
+    _ensure_improve_jobs_table()
+    job_id = uuid.uuid4().hex
+    conn, cursor = _open_db()
+    try:
+        cursor.execute('''
+            INSERT INTO improve_jobs (id, status, progress, message, extracted_text, warning)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (job_id, 'queued', 0, 'Queued', extracted_text, warning))
+        conn.commit()
+    finally:
+        conn.close()
+    return job_id
+
+def _update_improve_job(job_id, status=None, progress=None, message=None, ai_results_json=None, error=None, warning=None):
+    fields = []
+    values = []
+    if status is not None:
+        fields.append("status = ?")
+        values.append(status)
+    if progress is not None:
+        fields.append("progress = ?")
+        values.append(progress)
+    if message is not None:
+        fields.append("message = ?")
+        values.append(message)
+    if ai_results_json is not None:
+        fields.append("ai_results_json = ?")
+        values.append(ai_results_json)
+    if error is not None:
+        fields.append("error = ?")
+        values.append(error)
+    if warning is not None:
+        fields.append("warning = ?")
+        values.append(warning)
+    if not fields:
+        return
+    values.append(job_id)
+    conn, cursor = _open_db()
+    try:
+        cursor.execute(f"UPDATE improve_jobs SET {', '.join(fields)} WHERE id = ?", values)
+        conn.commit()
+    finally:
+        conn.close()
+
+def _process_improve_job(job_id, extracted_text, warning):
+    start_time = time.time()
+    last_progress = -1
+
+    def _progress_cb(value, message=None):
+        nonlocal last_progress
+        value = max(0, min(100, int(value)))
+        if value == last_progress and not message:
+            return
+        last_progress = value
+        _update_improve_job(job_id, progress=value, message=message)
+
+    try:
+        _update_improve_job(job_id, status='running', progress=5, message='Preparing analysis...', warning=warning)
+        ai_result, analysis_error = _run_local_analysis(
+            extracted_text,
+            progress_cb=_progress_cb,
+            timeout_seconds=IMPROVE_JOB_TIMEOUT_SECONDS,
+            start_time=start_time
+        )
+        if analysis_error:
+            _update_improve_job(job_id, status='error', progress=100, error=analysis_error, message=analysis_error)
+            return
+        _update_improve_job(job_id, status='done', progress=100, ai_results_json=json.dumps(ai_result), message='Complete')
+    except Exception:
+        app.logger.exception("Improve AI background job failed")
+        _update_improve_job(job_id, status='error', progress=100, error='AI checker temporarily unavailable. Please use Human Review.', message='AI checker temporarily unavailable.')
+
+def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None):
     try:
         from spellchecker import SpellChecker
     except Exception:
@@ -1567,6 +1683,11 @@ def _run_local_analysis(text):
 
     issues = []
     spell = SpellChecker()
+    if start_time is None:
+        start_time = time.time()
+
+    def _timed_out():
+        return (time.time() - start_time) > timeout_seconds
 
     email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
     url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
@@ -1583,7 +1704,11 @@ def _run_local_analysis(text):
         return False
 
     word_pattern = re.compile(r"[A-Za-z][A-Za-z'-]*")
-    for match in word_pattern.finditer(text):
+    tokens = list(word_pattern.finditer(text))
+    total_tokens = max(1, len(tokens))
+    for idx, match in enumerate(tokens):
+        if _timed_out():
+            return None, "Analysis timed out. Please try a shorter section."
         start, end = match.start(), match.end()
         if _overlaps_ignored(start, end):
             continue
@@ -1626,7 +1751,13 @@ def _run_local_analysis(text):
                 'message': 'Possible spelling mistake.',
                 'suggestions': suggestions
             })
+        if progress_cb and idx % 50 == 0:
+            progress_cb(20 + int(50 * idx / total_tokens), "Checking spelling...")
 
+    if _timed_out():
+        return None, "Analysis timed out. Please try a shorter section."
+    if progress_cb:
+        progress_cb(70, "Checking style...")
     try:
         style_hits = proselint_lint(text) or []
     except Exception:
@@ -1647,6 +1778,10 @@ def _run_local_analysis(text):
             'suggestions': []
         })
 
+    if _timed_out():
+        return None, "Analysis timed out. Please try a shorter section."
+    if progress_cb:
+        progress_cb(85, "Checking grammar...")
     for match in re.finditer(r'\b([A-Za-z]+)\s+(\1)\b', text, flags=re.IGNORECASE):
         issues.append({
             'start': match.start(),
@@ -1703,6 +1838,8 @@ def _run_local_analysis(text):
                 'suggestions': []
             })
 
+    if progress_cb:
+        progress_cb(95, "Finalizing...")
     for match in re.finditer(r'!!+', text):
         issues.append({
             'start': match.start(),
@@ -1750,7 +1887,8 @@ def improve():
         extracted_text=None,
         error=None,
         ai_results_json=None,
-        human_notice=None
+        human_notice=None,
+        prefill_text=''
     )
 
 @app.route('/improve/ai', methods=['POST'])
@@ -1759,9 +1897,10 @@ def improve_ai():
     try:
         text_input = (request.form.get('text') or '').strip()
         file = request.files.get('file')
+        warning = None
 
         if file and file.filename:
-            extracted_text, err = _extract_text_from_upload(file)
+            extracted_text, err, warning = _extract_text_from_upload(file)
             if err:
                 return render_template(
                     'improve.html',
@@ -1800,29 +1939,13 @@ def improve_ai():
                 prefill_text=extracted_text
             )
 
-        ai_result, analysis_error = _run_local_analysis(extracted_text)
-        if analysis_error:
-            return render_template(
-                'improve.html',
-                ai_result=None,
-                highlighted_text=None,
-                extracted_text=None,
-                error=analysis_error,
-                ai_results_json=None,
-                human_notice=None,
-                prefill_text=extracted_text
-            )
-        highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
-        return render_template(
-            'improve.html',
-            ai_result=ai_result,
-            highlighted_text=highlighted,
-            extracted_text=extracted_text,
-            error=None,
-            ai_results_json=json.dumps(ai_result),
-            human_notice=None,
-            prefill_text=extracted_text
-        )
+        job_id = _create_improve_job(extracted_text, warning)
+        threading.Thread(
+            target=_process_improve_job,
+            args=(job_id, extracted_text, warning),
+            daemon=True
+        ).start()
+        return redirect(url_for('improve_progress', job_id=job_id))
     except Exception:
         app.logger.exception("Improve AI failed")
         return render_template(
@@ -1844,10 +1967,11 @@ def improve_human():
     ai_results_json = (request.form.get('ai_results_json') or '').strip()
 
     extracted_text = ''
+    warning = None
     if provided_text:
         extracted_text = provided_text
     elif file and file.filename:
-        extracted_text, err = _extract_text_from_upload(file)
+        extracted_text, err, warning = _extract_text_from_upload(file)
         if err:
             return render_template(
                 'improve.html',
@@ -1896,6 +2020,8 @@ def improve_human():
         conn.close()
 
     notice = "Submitted for human review."
+    if warning:
+        notice = f"{notice} {warning}"
     return render_template(
         'improve.html',
         ai_result=None,
@@ -1903,7 +2029,8 @@ def improve_human():
         extracted_text=None,
         error=None,
         ai_results_json=None,
-        human_notice=notice
+        human_notice=notice,
+        prefill_text=''
     )
 
 @app.route('/admin/submissions', methods=['GET'])
@@ -1930,6 +2057,72 @@ def admin_submissions():
             'status': row[5]
         })
     return render_template('admin_submissions.html', submissions=submissions)
+
+@app.route('/improve/progress/<job_id>', methods=['GET'])
+def improve_progress(job_id):
+    _ensure_improve_jobs_table()
+    return render_template('improve_progress.html', job_id=job_id)
+
+@app.route('/improve/status/<job_id>', methods=['GET'])
+def improve_status(job_id):
+    _ensure_improve_jobs_table()
+    conn, cursor = _open_db()
+    cursor.execute('''
+        SELECT status, progress, message
+        FROM improve_jobs
+        WHERE id = ?
+    ''', (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'status': 'error', 'progress': 100, 'message': 'Job not found.'}), 404
+    status, progress, message = row
+    payload = {
+        'status': status,
+        'progress': progress or 0,
+        'message': message or ''
+    }
+    if status == 'done':
+        payload['result_url'] = url_for('improve_result', job_id=job_id)
+    return jsonify(payload)
+
+@app.route('/improve/result/<job_id>', methods=['GET'])
+def improve_result(job_id):
+    _ensure_improve_jobs_table()
+    conn, cursor = _open_db()
+    cursor.execute('''
+        SELECT status, message, extracted_text, ai_results_json, error, warning
+        FROM improve_jobs
+        WHERE id = ?
+    ''', (job_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return render_template('improve.html', ai_result=None, highlighted_text=None, extracted_text=None, error="Result not found.", ai_results_json=None, human_notice=None, prefill_text='')
+    status, message, extracted_text, ai_results_json, error, warning = row
+    if status != 'done' or not ai_results_json:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error=error or message or "AI checker temporarily unavailable. Please use Human Review.",
+            ai_results_json=None,
+            human_notice=None,
+            prefill_text=extracted_text or ''
+        )
+    try:
+        ai_result = json.loads(ai_results_json)
+    except Exception:
+        ai_result = None
+    highlighted = _build_highlighted_html(extracted_text or '', (ai_result or {}).get('issues', []))
+    return render_template(
+        'improve_results.html',
+        ai_result=ai_result,
+        highlighted_text=highlighted,
+        extracted_text=extracted_text or '',
+        warning=warning
+    )
 
 if __name__ == '__main__':
     # Initialize database
