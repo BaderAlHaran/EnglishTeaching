@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Improve Your Writing - English Essay Writing</title>
-    <meta name="description" content="Improve your writing with optional AI feedback or direct human review.">
+    <meta name="description" content="Improve your writing with fast, automatic feedback.">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -215,9 +215,6 @@
                     <a href="/#process" class="nav__link">Process</a>
                 </li>
                 <li class="nav__item">
-                    <a href="/improve" class="nav__link active">Improve Writing</a>
-                </li>
-                <li class="nav__item">
                     <a href="/about" class="nav__link">About</a>
                 </li>
                 <li class="nav__item">
@@ -236,8 +233,8 @@
     <section class="improve-hero">
         <div class="container">
             <h2 class="improve-hero__title">Improve Your Writing</h2>
-            <p class="improve-hero__description">Get optional AI feedback or send your text directly to a human reviewer. Choose the option that fits your needs.</p>
-            <p class="improve-hero__note">AI is optional. You may submit directly to a human reviewer.</p>
+            <p class="improve-hero__description">Get fast, automatic feedback on your writing in seconds.</p>
+            <p class="improve-hero__note">Paste text or upload a document to run the checker.</p>
         </div>
     </section>
 
@@ -252,7 +249,7 @@
 
             <div class="improve-grid">
                 <div class="improve-card">
-                    <h3 class="improve-card__title">AI Check</h3>
+                    <h3 class="improve-card__title">Writing Checker</h3>
                     <p class="improve-card__subtitle">Paste text or upload a PDF/DOCX. If a file is uploaded, it will be used instead of pasted text.</p>
                     <form action="/improve/ai" method="post" enctype="multipart/form-data">
                         <div class="form__group">
@@ -264,7 +261,7 @@
                             <input class="improve-file" id="ai-file" type="file" name="file" accept=".pdf,.docx">
                             <span class="form__help">Maximum file size: 10MB.</span>
                         </div>
-                        <button class="btn btn--primary" type="submit">Run AI Check</button>
+                        <button class="btn btn--primary" type="submit">Run Check</button>
                     </form>
 
                     {% if ai_result %}

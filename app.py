@@ -1774,11 +1774,11 @@ def _process_improve_job(job_id, extracted_text, warning):
         _update_improve_job(job_id, status='done', progress=100, result_html=result_html, message='Complete')
     except Exception:
         app.logger.exception("Improve AI background job failed")
-        _update_improve_job(job_id, status='error', progress=100, error='AI checker temporarily unavailable. Please use Human Review.', message='AI checker temporarily unavailable.')
+        _update_improve_job(job_id, status='error', progress=100, error='Writing checker temporarily unavailable. Please use Human Review.', message='Writing checker temporarily unavailable.')
 
 def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None):
     if not AI_CHECKER_ENABLED:
-        return None, "AI checker unavailable. Please use Human Review."
+        return None, "Writing checker unavailable. Please use Human Review."
 
     try:
         from spellchecker import SpellChecker
@@ -2245,7 +2245,7 @@ def improve_ai():
             ai_result=None,
             highlighted_text=None,
             extracted_text=None,
-            error="AI checker temporarily unavailable. Please use Human Review.",
+            error="Writing checker temporarily unavailable. Please use Human Review.",
             ai_results_json=None,
             human_notice=None,
             prefill_text=extracted_text
@@ -2414,7 +2414,7 @@ def improve_result(job_id):
             ai_result=None,
             highlighted_text=None,
             extracted_text=None,
-            error=error or message or "AI checker temporarily unavailable. Please use Human Review.",
+            error=error or message or "Writing checker temporarily unavailable. Please use Human Review.",
             ai_results_json=None,
             human_notice=None,
             prefill_text=extracted_text or ''
