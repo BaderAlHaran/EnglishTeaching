@@ -192,6 +192,18 @@
                         <td data-label="Details">
                             <details>
                                 <summary>View text</summary>
+                                {% if sub.requester_name or sub.requester_email or sub.requester_phone %}
+                                    <div class="page-subtitle" style="margin-top: 8px;">Requester</div>
+                                    {% if sub.requester_name %}
+                                        <div><strong>Name:</strong> {{ sub.requester_name|e }}</div>
+                                    {% endif %}
+                                    {% if sub.requester_email %}
+                                        <div><strong>Email:</strong> {{ sub.requester_email|e }}</div>
+                                    {% endif %}
+                                    {% if sub.requester_phone %}
+                                        <div><strong>Phone:</strong> {{ sub.requester_phone|e }}</div>
+                                    {% endif %}
+                                {% endif %}
                                 <pre>{{ sub.extracted_text|e }}</pre>
                                 {% if sub.ai_results_json %}
                                     <div class="page-subtitle" style="margin-top: 8px;">AI Results</div>

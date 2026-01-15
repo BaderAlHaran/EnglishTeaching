@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Correction Request - English Essay Writing</title>
+    <meta name="description" content="Submit your details to request a human correction.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+
+    <style>
+        .human-hero {
+            padding: calc(70px + var(--space-20)) 0 var(--space-12);
+            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            text-align: center;
+        }
+        .human-hero__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-4xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-3);
+        }
+        .human-hero__description {
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+            font-size: var(--fs-lg);
+        }
+        .human-section {
+            padding: var(--space-16) 0 var(--space-24);
+            background: var(--background-secondary);
+        }
+        .human-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-10);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+        }
+        .human-alert {
+            margin-bottom: var(--space-6);
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+            background: #fdecea;
+            color: #b42318;
+            border: 1px solid #f5c2c7;
+        }
+        .human-note {
+            margin-top: var(--space-2);
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+        }
+        .human-actions {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-top: var(--space-6);
+        }
+        .human-actions .btn {
+            min-width: 180px;
+        }
+        .improve-hidden { display: none; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <h1 class="nav__logo">English Essay Writing</h1>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="/" class="nav__link">Home</a></li>
+                <li class="nav__item"><a href="/#services" class="nav__link">Services</a></li>
+                <li class="nav__item"><a href="/#process" class="nav__link">Process</a></li>
+                <li class="nav__item"><a href="/about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="/contact" class="nav__link">Contact</a></li>
+                <li class="nav__item"><a href="/faq" class="nav__link">FAQ</a></li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <section class="human-hero">
+        <div class="container">
+            <h2 class="human-hero__title">Human Correction Request</h2>
+            <p class="human-hero__description">Add your contact details so we can follow up with the corrected draft.</p>
+        </div>
+    </section>
+
+    <section class="human-section">
+        <div class="container">
+            <div class="human-card">
+                {% if error %}
+                <div class="human-alert">{{ error }}</div>
+                {% endif %}
+                <form action="/improve/human" method="post">
+                    <input type="hidden" name="require_contact" value="1">
+                    <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|default('', true)|e }}</textarea>
+
+                    <div class="form__section">
+                        <h3 class="form__section-title">Your Details</h3>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label class="form__label" for="requester-name">Full Name *</label>
+                                <input class="form__input" id="requester-name" name="requester_name" type="text" value="{{ requester_name|default('', true)|e }}" required>
+                            </div>
+                            <div class="form__group">
+                                <label class="form__label" for="requester-email">Email Address *</label>
+                                <input class="form__input" id="requester-email" name="requester_email" type="email" value="{{ requester_email|default('', true)|e }}" required>
+                            </div>
+                        </div>
+                        <div class="form__row">
+                            <div class="form__group">
+                                <label class="form__label" for="requester-phone">Phone Number</label>
+                                <input class="form__input" id="requester-phone" name="requester_phone" type="tel" value="{{ requester_phone|default('', true)|e }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form__section">
+                        <h3 class="form__section-title">Text to Correct</h3>
+                        <div class="form__group">
+                            <label class="form__label" for="requester-text">Your Draft</label>
+                            <textarea class="form__textarea" id="requester-text" name="extracted_text" rows="8">{{ extracted_text|default('', true)|e }}</textarea>
+                            <p class="human-note">You can edit the draft before submitting.</p>
+                        </div>
+                    </div>
+
+                    <div class="human-actions">
+                        <button class="btn btn--primary" type="submit">Submit for Human Review</button>
+                        <a class="btn btn--secondary" href="/improve">Back to Improve</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                    </ul>
+                </div>
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>norakalmutairi@gmail.com</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copy">&copy; 2026 English Essay Writing. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/script.js" defer></script>
+</body>
+</html>

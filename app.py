@@ -1515,6 +1515,22 @@ def _ensure_submissions_table():
                     status TEXT DEFAULT 'new'
                 )
             ''')
+        if _is_postgres():
+            cursor.execute('''
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'submissions'
+            ''')
+            columns = {row[0] for row in cursor.fetchall()}
+        else:
+            cursor.execute('PRAGMA table_info(submissions)')
+            columns = {row[1] for row in cursor.fetchall()}
+        if 'requester_name' not in columns:
+            cursor.execute('ALTER TABLE submissions ADD COLUMN requester_name TEXT')
+        if 'requester_email' not in columns:
+            cursor.execute('ALTER TABLE submissions ADD COLUMN requester_email TEXT')
+        if 'requester_phone' not in columns:
+            cursor.execute('ALTER TABLE submissions ADD COLUMN requester_phone TEXT')
         conn.commit()
     finally:
         conn.close()
@@ -2888,12 +2904,55 @@ def improve_ai():
             **_improve_context()
         )
 
+@app.route('/improve/human/form', methods=['POST'])
+def improve_human_form():
+    extracted_text = (request.form.get('extracted_text') or '').strip()
+    ai_results_json = (request.form.get('ai_results_json') or '').strip()
+
+    if not extracted_text:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Please run a check before requesting human review.",
+            ai_results_json=None,
+            human_notice=None,
+            **_improve_context()
+        )
+
+    if len(extracted_text) > IMPROVE_MAX_CHARS:
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error=f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer.",
+            ai_results_json=None,
+            human_notice=None,
+            **_improve_context()
+        )
+
+    return render_template(
+        'improve_human_form.html',
+        extracted_text=extracted_text,
+        ai_results_json=ai_results_json,
+        requester_name='',
+        requester_email='',
+        requester_phone='',
+        error=None
+    )
+
 @app.route('/improve/human', methods=['POST'])
 def improve_human():
     text_input = (request.form.get('text') or '').strip()
     file = request.files.get('file')
     provided_text = (request.form.get('extracted_text') or '').strip()
     ai_results_json = (request.form.get('ai_results_json') or '').strip()
+    require_contact = (request.form.get('require_contact') or '').strip() == '1'
+    requester_name = (request.form.get('requester_name') or '').strip()
+    requester_email = (request.form.get('requester_email') or '').strip()
+    requester_phone = (request.form.get('requester_phone') or '').strip()
 
     extracted_text = ''
     warning = None
@@ -2916,37 +2975,98 @@ def improve_human():
         extracted_text = text_input
 
     if not extracted_text:
-        return render_template(
-            'improve.html',
-            ai_result=None,
-            highlighted_text=None,
-            extracted_text=None,
-            error="Please paste text or upload a file.",
-            ai_results_json=None,
-            human_notice=None,
-            **_improve_context()
-        )
+        if require_contact:
+            return render_template(
+                'improve_human_form.html',
+                extracted_text='',
+                ai_results_json=ai_results_json,
+                requester_name=requester_name,
+                requester_email=requester_email,
+                requester_phone=requester_phone,
+                error="Please provide the text you want corrected."
+            )
+        else:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error="Please paste text or upload a file.",
+                ai_results_json=None,
+                human_notice=None,
+                **_improve_context()
+            )
 
     if len(extracted_text) > IMPROVE_MAX_CHARS:
-        return render_template(
-            'improve.html',
-            ai_result=None,
-            highlighted_text=None,
-            extracted_text=None,
-            error=f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer.",
-            ai_results_json=None,
-            human_notice=None,
-            **_improve_context()
-        )
+        error_message = f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer."
+        if require_contact:
+            return render_template(
+                'improve_human_form.html',
+                extracted_text=extracted_text,
+                ai_results_json=ai_results_json,
+                requester_name=requester_name,
+                requester_email=requester_email,
+                requester_phone=requester_phone,
+                error=error_message
+            )
+        else:
+            return render_template(
+                'improve.html',
+                ai_result=None,
+                highlighted_text=None,
+                extracted_text=None,
+                error=error_message,
+                ai_results_json=None,
+                human_notice=None,
+                **_improve_context()
+            )
+
+    if require_contact:
+        if not requester_name or not requester_email:
+            return render_template(
+                'improve_human_form.html',
+                extracted_text=extracted_text,
+                ai_results_json=ai_results_json,
+                requester_name=requester_name,
+                requester_email=requester_email,
+                requester_phone=requester_phone,
+                error="Please enter your name and email address."
+            )
+        if not EMAIL_REGEX.match(requester_email):
+            return render_template(
+                'improve_human_form.html',
+                extracted_text=extracted_text,
+                ai_results_json=ai_results_json,
+                requester_name=requester_name,
+                requester_email=requester_email,
+                requester_phone=requester_phone,
+                error="Please enter a valid email address."
+            )
 
     mode = 'after_ai' if ai_results_json else 'human_only'
     _ensure_submissions_table()
     conn, cursor = _open_db()
     try:
         cursor.execute('''
-            INSERT INTO submissions (mode, extracted_text, ai_results_json, status)
-            VALUES (?, ?, ?, ?)
-        ''', (mode, extracted_text, ai_results_json or None, 'new'))
+            INSERT INTO submissions (
+                mode,
+                extracted_text,
+                ai_results_json,
+                status,
+                requester_name,
+                requester_email,
+                requester_phone
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            mode,
+            extracted_text,
+            ai_results_json or None,
+            'new',
+            requester_name or None,
+            requester_email or None,
+            requester_phone or None
+        ))
         conn.commit()
     finally:
         conn.close()
@@ -2972,7 +3092,8 @@ def admin_submissions():
     _ensure_submissions_table()
     conn, cursor = _open_db()
     cursor.execute('''
-        SELECT id, created_at, mode, extracted_text, ai_results_json, status
+        SELECT id, created_at, mode, extracted_text, ai_results_json, status,
+               requester_name, requester_email, requester_phone
         FROM submissions
         ORDER BY created_at DESC
     ''')
@@ -2987,7 +3108,10 @@ def admin_submissions():
             'mode': row[2],
             'extracted_text': row[3],
             'ai_results_json': row[4],
-            'status': row[5]
+            'status': row[5],
+            'requester_name': row[6],
+            'requester_email': row[7],
+            'requester_phone': row[8]
         })
     return render_template('admin_submissions.html', submissions=submissions)
 

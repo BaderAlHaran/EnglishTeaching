@@ -379,7 +379,7 @@
                         {% else %}
                         <p class="form__help">No issues detected.</p>
                         {% endif %}
-                        <form action="/improve/human" method="post" style="margin-top: var(--space-6);">
+                        <form action="/improve/human/form" method="post" style="margin-top: var(--space-6);">
                             <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
                             <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|e }}</textarea>
                             <button class="btn improve-btn-secondary" type="submit">Send to Human for Correction</button>
