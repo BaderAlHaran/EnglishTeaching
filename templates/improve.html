@@ -336,13 +336,13 @@
                         </div>
                         <div class="improve-editor__meta">
                             <span data-improve-word-count>0 words</span>
-                            <span data-improve-char-count>0 / {{ max_chars|default(10000, true) }} chars</span>
+                            <span data-improve-char-count>0 / {{ max_chars|default(40000, true) }} chars</span>
                         </div>
                     </div>
                     <form action="/improve/ai" method="post" enctype="multipart/form-data">
                         <div class="form__group">
                             <label class="form__label" for="ai-text">Paste your text</label>
-                            <textarea class="form__textarea" id="ai-text" name="text" data-improve-input data-max-chars="{{ max_chars|default(10000, true) }}" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
+                            <textarea class="form__textarea" id="ai-text" name="text" data-improve-input data-max-chars="{{ max_chars|default(40000, true) }}" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
                         </div>
                         <div class="form__group">
                             <label class="form__label" for="ai-file">Or upload a file (.pdf, .docx)</label>
@@ -351,9 +351,7 @@
                         </div>
                         <div class="improve-actions">
                             <button class="btn btn--primary" type="submit" name="mode" value="standard">Run Check</button>
-                            <button class="btn btn--secondary" type="submit" name="mode" value="deep">Deep Check (GECToR)</button>
                         </div>
-                        <div class="improve-actions__note">Deep Check is optional and limited to {{ deep_max_chars|default(2000, true) }} characters.</div>
                     </form>
 
                     {% if ai_result %}
@@ -409,8 +407,7 @@
                     </div>
                     <div class="improve-card improve-card--soft">
                         <h4 class="improve-side__title">Good to know</h4>
-                        <p class="improve-tip">Maximum length: {{ max_chars|default(10000, true) }} characters.</p>
-                        <p class="improve-tip">Deep Check limit: {{ deep_max_chars|default(2000, true) }} characters.</p>
+                        <p class="improve-tip">Maximum length: {{ max_chars|default(40000, true) }} characters.</p>
                         <p class="improve-tip">Need expert help? Send your draft for human correction after the check.</p>
                     </div>
                 </div>

@@ -17,7 +17,6 @@ import logging
 import resend
 import math
 import importlib.resources as importlib_resources
-import urllib.request
 from urllib.parse import urlparse
 import threading
 from markupsafe import escape, Markup
@@ -1472,13 +1471,10 @@ def admin_set_password():
 
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 IMPROVE_MAX_BYTES = 10 * 1024 * 1024
-IMPROVE_MAX_CHARS = int(os.environ.get('IMPROVE_MAX_CHARS', '10000'))
-IMPROVE_DEEP_MAX_CHARS = int(os.environ.get('IMPROVE_DEEP_MAX_CHARS', '2000'))
+IMPROVE_MAX_CHARS = int(os.environ.get('IMPROVE_MAX_CHARS', '40000'))
 IMPROVE_MAX_PAGES = int(os.environ.get('IMPROVE_MAX_PAGES', '10'))
 IMPROVE_JOB_TIMEOUT_SECONDS = 20
 AI_CHECKER_ENABLED = os.environ.get('AI_CHECKER_ENABLED', 'true').lower() in {'1', 'true', 'yes', 'on'}
-GECTOR_ENABLED = os.environ.get('GECTOR_ENABLED', '').lower() in {'1', 'true', 'yes', 'on'}
-GECTOR_ENDPOINT = (os.environ.get('GECTOR_ENDPOINT') or '').strip()
 SPELLING_ALLOWLIST = {
     'Bader', 'Kuwait', 'GCC', 'MENA', 'SaaS', 'STEM', 'API', 'APIs', 'COVID', 'COVID-19',
     'Python', 'Flask', 'Postgres', 'PostgreSQL', 'SQL', 'NoSQL', 'GitHub', 'Render',
@@ -1488,6 +1484,11 @@ SPELLING_ALLOWLIST = {
 _IMPROVE_NLP = None
 _IMPROVE_ALLOWLIST_CACHE = None
 _IMPROVE_SYMSPELL = None
+
+def _improve_context():
+    return {
+        'max_chars': IMPROVE_MAX_CHARS
+    }
 
 def _ensure_submissions_table():
     conn, cursor = _open_db()
@@ -1871,10 +1872,9 @@ def _serialize_improve_json(ai_result):
         return None
     return payload.replace('<', '\\u003c')
 
-def _process_improve_job(job_id, extracted_text, warning, deep_mode=False):
+def _process_improve_job(job_id, extracted_text, warning):
     start_time = time.time()
     last_progress = -1
-    max_chars = IMPROVE_DEEP_MAX_CHARS if deep_mode else IMPROVE_MAX_CHARS
 
     def _progress_cb(value, message=None):
         nonlocal last_progress
@@ -1885,47 +1885,27 @@ def _process_improve_job(job_id, extracted_text, warning, deep_mode=False):
         _update_improve_job(job_id, progress=value, message=message)
 
     try:
-        if len(extracted_text or '') > max_chars:
-            if deep_mode:
-                message = f"Deep Check supports up to {IMPROVE_DEEP_MAX_CHARS:,} characters."
-            else:
-                message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
+        if len(extracted_text or '') > IMPROVE_MAX_CHARS:
+            message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
             app.logger.info("Improve job %s rejected len=%s reason=too_long", job_id, len(extracted_text))
             _update_improve_job(job_id, status='error', progress=100, error=message, message=message)
             return
-        status_message = 'Preparing deep analysis...' if deep_mode else 'Preparing analysis...'
-        _update_improve_job(job_id, status='running', progress=5, message=status_message, warning=warning)
+        _update_improve_job(job_id, status='running', progress=5, message='Preparing analysis...', warning=warning)
         ai_result, analysis_error, analysis_warning = _run_local_analysis(
             extracted_text,
             progress_cb=_progress_cb,
             timeout_seconds=IMPROVE_JOB_TIMEOUT_SECONDS,
-            start_time=start_time,
-            deep_mode=deep_mode
+            start_time=start_time
         )
         if analysis_error:
             _update_improve_job(job_id, status='error', progress=100, error=analysis_error, message=analysis_error)
             return
-        deep_warning = None
-        if deep_mode:
-            deep_issues, deep_warning = _run_gector_check(
-                extracted_text,
-                sentences=ai_result.get('sentences') if ai_result else None,
-                progress_cb=_progress_cb,
-                timeout_seconds=IMPROVE_JOB_TIMEOUT_SECONDS,
-                start_time=start_time
-            )
-            if deep_issues:
-                ai_result = _merge_deep_issues(ai_result, deep_issues)
         combined_warning = warning
-        for extra_warning in (analysis_warning, deep_warning):
-            if not extra_warning:
-                continue
+        if analysis_warning:
             if combined_warning:
-                combined_warning = f"{combined_warning} {extra_warning}"
+                combined_warning = f"{combined_warning} {analysis_warning}"
             else:
-                combined_warning = extra_warning
-        if deep_mode and not deep_warning:
-            combined_warning = combined_warning or 'Deep Check enabled.'
+                combined_warning = analysis_warning
         highlighted = _build_highlighted_html(extracted_text, ai_result.get('issues', []))
         result_html = _build_result_html(ai_result, highlighted)
         result_json = _serialize_improve_json(ai_result)
@@ -1944,7 +1924,7 @@ def _process_improve_job(job_id, extracted_text, warning, deep_mode=False):
         err_msg = str(exc).strip() or "Writing checker failed unexpectedly. Please try again or use Human Review."
         _update_improve_job(job_id, status='error', progress=100, error=err_msg, message=err_msg)
 
-def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, deep_mode=False):
+def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None):
     if not AI_CHECKER_ENABLED:
         return None, "Writing checker unavailable. Please use Human Review.", None
 
@@ -2399,9 +2379,20 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         (r'\bmake a decision\b', 'decide'),
         (r'\btake into account\b', 'consider')
     ]
-    long_sentence_limit = 32 if deep_mode else 40
-    max_filler_hits = 2 if deep_mode else 1
-    max_wordy_hits = 3 if deep_mode else 2
+    confusion_patterns = [
+        (r'\bcould care less\b', 'Did you mean "couldn\'t care less"?', ["couldn't care less"]),
+        (r'\bbased off\b', 'Use "based on" instead of "based off".', ['based on']),
+        (r'\bfor all intensive purposes\b', 'Did you mean "for all intents and purposes"?', ['for all intents and purposes']),
+        (r'\birregardless\b', 'Use "regardless".', ['regardless']),
+        (r'\bdifferent then\b', 'Did you mean "different from"?', ['different from']),
+        (r'\bbetween you and I\b', 'Use an object pronoun after "between".', ['between you and me']),
+        (r'\bthe reason is because\b', 'Avoid double "reason"; use "because" or "the reason is that".', ['because', 'the reason is that']),
+        (r'\bmore better\b', 'Use "better" without "more".', ['better'])
+    ]
+    count_noun_targets = {'people', 'students', 'children', 'books', 'cars', 'results', 'problems', 'issues', 'items', 'examples', 'times', 'days', 'weeks', 'years', 'things'}
+    long_sentence_limit = 40
+    max_filler_hits = 1
+    max_wordy_hits = 2
 
     for sentence in sentences:
         if _time_guard():
@@ -2487,6 +2478,20 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         for match in re.finditer(r"\b(to|can|could|should|would|may|might|will|does|did|do)\s+effect\b", sent_text, flags=re.IGNORECASE):
             _add_issue(sentence['start'] + match.start(0), sentence['start'] + match.end(0), 'grammar', 'Did you mean "affect"?', ['affect'], sentence_id=sent_id)
 
+        for pattern, message, suggestions in confusion_patterns:
+            for match in re.finditer(pattern, sent_text, flags=re.IGNORECASE):
+                _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', message, suggestions, sentence_id=sent_id)
+
+        for match in re.finditer(r"\bless\s+([A-Za-z]+)\b", sent_text, flags=re.IGNORECASE):
+            noun = match.group(1).lower()
+            if noun in count_noun_targets:
+                _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Use "fewer" with countable nouns.', ['fewer'], sentence_id=sent_id)
+
+        for match in re.finditer(r"\bamount of\s+([A-Za-z]+)\b", sent_text, flags=re.IGNORECASE):
+            noun = match.group(1).lower()
+            if noun in count_noun_targets:
+                _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Use "number of" with countable nouns.', ['number of'], sentence_id=sent_id)
+
         first_word = words[0].group(0).lower()
         if first_word in greetings and len(words) >= 2:
             name_token = words[1]
@@ -2554,13 +2559,12 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
 
         doc_sentence = doc_sentences.get(sent_id)
         if doc_sentence is not None:
-            if deep_mode:
-                passive = any(tok.dep_ in {'nsubjpass', 'auxpass'} for tok in doc_sentence)
-                if passive:
-                    _add_issue(sentence['start'], sentence['end'], 'style', 'Passive voice; consider using active voice.', [], sentence_id=sent_id)
-                adverb_count = sum(1 for tok in doc_sentence if tok.tag_ == 'RB' and tok.text.lower().endswith('ly'))
-                if adverb_count >= 4:
-                    _add_issue(sentence['start'], sentence['end'], 'style', 'Heavy adverb use; consider tightening.', [], sentence_id=sent_id)
+            passive = any(tok.dep_ in {'nsubjpass', 'auxpass'} for tok in doc_sentence)
+            if passive:
+                _add_issue(sentence['start'], sentence['end'], 'style', 'Passive voice; consider using active voice.', [], sentence_id=sent_id)
+            adverb_count = sum(1 for tok in doc_sentence if tok.tag_ == 'RB' and tok.text.lower().endswith('ly'))
+            if adverb_count >= 4:
+                _add_issue(sentence['start'], sentence['end'], 'style', 'Heavy adverb use; consider tightening.', [], sentence_id=sent_id)
 
     if progress_cb:
         progress_cb(48, "Checking mechanics...")
@@ -2687,9 +2691,6 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
             message = (hit.get('message') or '').strip()
             if start is None or end is None or not message:
                 continue
-            msg_lower = message.lower()
-            if not any(key in msg_lower for key in ('capitalize', 'punctuation', 'comma', 'period', 'a/an', 'article', 'agreement', 'subject')):
-                continue
             _add_issue(start, end, 'style', message, [], sentence_id=_sentence_id_for_span(start, end, sentences))
 
     for sentence in sentences:
@@ -2776,121 +2777,6 @@ def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=N
         'issue_total': issue_total,
         'rewrite_count': rewrite_count
     }, None, warning
-
-def _merge_deep_issues(ai_result, deep_issues):
-    if not ai_result or not deep_issues:
-        return ai_result
-    issues = (ai_result.get('issues') or []) + deep_issues
-    seen = set()
-    merged = []
-    for item in issues:
-        kind = item.get('kind') or 'style'
-        item['kind'] = kind
-        key = (item.get('start'), item.get('end'), kind, item.get('message'))
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(item)
-    for idx, issue in enumerate(merged, start=1):
-        issue['issue_id'] = f'issue-{idx}'
-    summary = {
-        'spelling': sum(1 for i in merged if i['kind'] == 'spelling' and not i.get('no_highlight')),
-        'grammar': sum(1 for i in merged if i['kind'] == 'grammar' and not i.get('no_highlight')),
-        'style': sum(1 for i in merged if i['kind'] == 'style' and not i.get('no_highlight') and not i.get('is_rewrite'))
-    }
-    rewrite_count = sum(1 for i in merged if i.get('is_rewrite'))
-    issue_total = summary['spelling'] + summary['grammar'] + summary['style'] + rewrite_count
-    score = max(35, min(100, 100 - (issue_total * 2)))
-    ai_result['issues'] = merged
-    ai_result['summary'] = summary
-    ai_result['rewrite_count'] = rewrite_count
-    ai_result['issue_total'] = issue_total
-    ai_result['score'] = score
-    return ai_result
-
-def _run_gector_check(text, sentences=None, progress_cb=None, timeout_seconds=20, start_time=None):
-    if not GECTOR_ENABLED:
-        return [], "Deep Check disabled. Enable GECTOR_ENABLED to use it."
-    if not GECTOR_ENDPOINT:
-        return [], "Deep Check unavailable. Configure GECTOR_ENDPOINT to use GECToR."
-    if not text or not text.strip():
-        return [], None
-    if start_time is None:
-        start_time = time.time()
-    remaining = timeout_seconds - (time.time() - start_time)
-    if remaining <= 3:
-        return [], "Deep Check skipped due to time limits."
-    if progress_cb:
-        progress_cb(70, "Running Deep Check...")
-
-    payload = json.dumps({'text': text}).encode('utf-8')
-    req = urllib.request.Request(
-        GECTOR_ENDPOINT,
-        data=payload,
-        headers={'Content-Type': 'application/json'}
-    )
-    try:
-        timeout = max(3, min(8, remaining - 1))
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode('utf-8')
-            data = json.loads(body) if body else {}
-    except Exception as exc:
-        return [], f"Deep Check unavailable: {exc}"
-
-    candidates = []
-    if isinstance(data, dict):
-        for key in ('corrections', 'edits', 'sentences', 'results'):
-            if isinstance(data.get(key), list):
-                candidates = data.get(key)
-                break
-    elif isinstance(data, list):
-        candidates = data
-
-    issues = []
-    if not candidates:
-        return issues, None
-
-    sentence_list = sentences or []
-    for idx, item in enumerate(candidates):
-        if not isinstance(item, dict):
-            continue
-        start = item.get('start')
-        end = item.get('end')
-        replacement = (
-            item.get('replacement')
-            or item.get('suggestion')
-            or item.get('corrected')
-            or item.get('rewrite')
-        )
-        if replacement and (start is None or end is None):
-            sent_index = item.get('index')
-            if sent_index is None:
-                sent_index = item.get('sentence_index')
-            if sent_index is None and idx < len(sentence_list):
-                sent_index = idx
-            if isinstance(sent_index, int) and 0 <= sent_index < len(sentence_list):
-                start = sentence_list[sent_index].get('start')
-                end = sentence_list[sent_index].get('end')
-        if replacement is None or start is None or end is None:
-            continue
-        start = int(start)
-        end = int(end)
-        if start < 0 or end <= start or end > len(text):
-            continue
-        original = text[start:end]
-        if replacement.strip() == original.strip():
-            continue
-        issues.append({
-            'start': start,
-            'end': end,
-            'kind': 'style',
-            'message': replacement,
-            'suggestions': [replacement],
-            'sentence_id': None,
-            'no_highlight': True,
-            'is_rewrite': True
-        })
-    return issues, None
 def _build_highlighted_html(text, issues):
     if not issues:
         return Markup(escape(text))
@@ -2931,8 +2817,7 @@ def improve():
         ai_results_json=None,
         human_notice=None,
         prefill_text='',
-        max_chars=IMPROVE_MAX_CHARS,
-        deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+        **_improve_context()
     )
 
 @app.route('/improve/ai', methods=['POST'])
@@ -2941,10 +2826,7 @@ def improve_ai():
     try:
         text_input = (request.form.get('text') or '').strip()
         file = request.files.get('file')
-        mode = (request.form.get('mode') or 'standard').strip().lower()
-        deep_mode = mode == 'deep'
         warning = None
-        max_chars = IMPROVE_DEEP_MAX_CHARS if deep_mode else IMPROVE_MAX_CHARS
 
         if file and file.filename:
             extracted_text, err, warning = _extract_text_from_upload(file)
@@ -2958,8 +2840,7 @@ def improve_ai():
                     ai_results_json=None,
                     human_notice=None,
                     prefill_text=text_input,
-                    max_chars=IMPROVE_MAX_CHARS,
-                    deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+                    **_improve_context()
                 )
             if warning:
                 app.logger.info("Improve AI truncated PDF to %s pages", IMPROVE_MAX_PAGES)
@@ -2976,24 +2857,10 @@ def improve_ai():
                 ai_results_json=None,
                 human_notice=None,
                 prefill_text='',
-                max_chars=IMPROVE_MAX_CHARS,
-                deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+                **_improve_context()
             )
 
-        if len(extracted_text) > max_chars:
-            if deep_mode:
-                return render_template(
-                    'improve.html',
-                    ai_result=None,
-                    highlighted_text=None,
-                    extracted_text=None,
-                    error=f"Deep Check supports up to {IMPROVE_DEEP_MAX_CHARS:,} characters.",
-                    ai_results_json=None,
-                    human_notice=None,
-                    prefill_text='',
-                    max_chars=IMPROVE_MAX_CHARS,
-                    deep_max_chars=IMPROVE_DEEP_MAX_CHARS
-                )
+        if len(extracted_text) > IMPROVE_MAX_CHARS:
             message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
             app.logger.info("Improve AI rejected len=%s reason=too_long", len(extracted_text))
             job_id = _create_improve_job('', warning)
@@ -3003,7 +2870,7 @@ def improve_ai():
         job_id = _create_improve_job(extracted_text, warning)
         threading.Thread(
             target=_process_improve_job,
-            args=(job_id, extracted_text, warning, deep_mode),
+            args=(job_id, extracted_text, warning),
             daemon=True
         ).start()
         return redirect(url_for('improve_progress', job_id=job_id))
@@ -3018,8 +2885,7 @@ def improve_ai():
             ai_results_json=None,
             human_notice=None,
             prefill_text=extracted_text,
-            max_chars=IMPROVE_MAX_CHARS,
-            deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+            **_improve_context()
         )
 
 @app.route('/improve/human', methods=['POST'])
@@ -3044,8 +2910,7 @@ def improve_human():
                 error=err,
                 ai_results_json=None,
                 human_notice=None,
-                max_chars=IMPROVE_MAX_CHARS,
-                deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+                **_improve_context()
             )
     else:
         extracted_text = text_input
@@ -3059,8 +2924,7 @@ def improve_human():
             error="Please paste text or upload a file.",
             ai_results_json=None,
             human_notice=None,
-            max_chars=IMPROVE_MAX_CHARS,
-            deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+            **_improve_context()
         )
 
     if len(extracted_text) > IMPROVE_MAX_CHARS:
@@ -3072,8 +2936,7 @@ def improve_human():
             error=f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer.",
             ai_results_json=None,
             human_notice=None,
-            max_chars=IMPROVE_MAX_CHARS,
-            deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+            **_improve_context()
         )
 
     mode = 'after_ai' if ai_results_json else 'human_only'
@@ -3100,8 +2963,7 @@ def improve_human():
         ai_results_json=None,
         human_notice=notice,
         prefill_text='',
-        max_chars=IMPROVE_MAX_CHARS,
-        deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+        **_improve_context()
     )
 
 @app.route('/admin/submissions', methods=['GET'])
@@ -3194,8 +3056,7 @@ def improve_result(job_id):
             ai_results_json=None,
             human_notice=None,
             prefill_text='',
-            max_chars=IMPROVE_MAX_CHARS,
-            deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+            **_improve_context()
         )
     status, message, extracted_text, result_html, result_json, error, warning = row
     if status != 'done' or not result_html:
@@ -3208,8 +3069,7 @@ def improve_result(job_id):
             ai_results_json=None,
             human_notice=None,
             prefill_text=extracted_text or '',
-            max_chars=IMPROVE_MAX_CHARS,
-            deep_max_chars=IMPROVE_DEEP_MAX_CHARS
+            **_improve_context()
         )
     return render_template(
         'improve_results.html',
