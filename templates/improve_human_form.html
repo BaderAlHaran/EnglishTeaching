@@ -108,26 +108,28 @@
                 {% if error %}
                 <div class="human-alert">{{ error }}</div>
                 {% endif %}
-                <form action="/improve/human" method="post">
-                    <input type="hidden" name="require_contact" value="1">
-                    <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|default('', true)|e }}</textarea>
+                <form action="/improve/human/submit" method="post" id="improveHumanForm">
+                    <div class="form__group" style="display:none;" aria-hidden="true">
+                        <label for="website">Website</label>
+                        <input type="text" id="website" name="website" autocomplete="off" tabindex="-1">
+                    </div>
 
                     <div class="form__section">
                         <h3 class="form__section-title">Your Details</h3>
                         <div class="form__row">
                             <div class="form__group">
                                 <label class="form__label" for="requester-name">Full Name *</label>
-                                <input class="form__input" id="requester-name" name="requester_name" type="text" value="{{ requester_name|default('', true)|e }}" required>
+                                <input class="form__input" id="requester-name" name="fullName" type="text" value="{{ requester_name|default('', true)|e }}" required>
                             </div>
                             <div class="form__group">
                                 <label class="form__label" for="requester-email">Email Address *</label>
-                                <input class="form__input" id="requester-email" name="requester_email" type="email" value="{{ requester_email|default('', true)|e }}" required>
+                                <input class="form__input" id="requester-email" name="email" type="email" value="{{ requester_email|default('', true)|e }}" required>
                             </div>
                         </div>
                         <div class="form__row">
                             <div class="form__group">
                                 <label class="form__label" for="requester-phone">Phone Number</label>
-                                <input class="form__input" id="requester-phone" name="requester_phone" type="tel" value="{{ requester_phone|default('', true)|e }}">
+                                <input class="form__input" id="requester-phone" name="phone" type="tel" value="{{ requester_phone|default('', true)|e }}">
                             </div>
                         </div>
                     </div>
@@ -136,8 +138,18 @@
                         <h3 class="form__section-title">Text to Correct</h3>
                         <div class="form__group">
                             <label class="form__label" for="requester-text">Your Draft</label>
-                            <textarea class="form__textarea" id="requester-text" name="extracted_text" rows="8">{{ extracted_text|default('', true)|e }}</textarea>
+                            <textarea class="form__textarea" id="requester-text" name="instructions" rows="8">{{ extracted_text|default('', true)|e }}</textarea>
                             <p class="human-note">You can edit the draft before submitting.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="form__section">
+                        <div class="form__group">
+                            <label class="form__checkbox">
+                                <input type="checkbox" id="terms" name="terms" required>
+                                <span class="form__checkmark"></span>
+                                I agree to the <a href="/terms" class="form__link" target="_blank">Terms and Conditions</a> and <a href="/privacy" class="form__link" target="_blank">Privacy Policy</a> *
+                            </label>
                         </div>
                     </div>
 

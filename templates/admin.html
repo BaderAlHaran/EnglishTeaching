@@ -623,6 +623,17 @@
                     <div class="stat-value">{{ stats.assigned_submissions or 0 }}</div>
                     <div class="stat-change">In progress</div>
                 </div>
+                
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-title">Human Corrections</div>
+                        <div class="stat-icon pending">
+                            <i class="fas fa-user-edit"></i>
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ stats.improve_submissions or 0 }}</div>
+                    <div class="stat-change">Improve requests</div>
+                </div>
             </div>
             
             <!-- Submissions Table -->
@@ -719,7 +730,79 @@
                     </div>
                     {% endif %}
                 </div>
+              </div>
+
+        <!-- Improve Submissions Table -->
+        <div class="table-section" style="margin-top:24px">
+            <div class="table-header">
+                <h2 class="table-title">Human Correction Requests</h2>
+                <p class="table-subtitle">
+                    Latest requests from Improve Your Writing.
+                    <a href="/admin/submissions" style="margin-left:8px;color:#3b82f6;text-decoration:none;font-weight:600;">View all</a>
+                </p>
             </div>
+            
+            <div class="table-container">
+                {% if improve_submissions %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Mode</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                            <th>Preview</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in improve_submissions %}
+                        <tr>
+                            <td data-label="ID">
+                                <div style="font-weight: 600; color: #1e293b;">
+                                    {{ sub.submission_id or sub.id }}
+                                </div>
+                            </td>
+                            <td data-label="Name">{{ sub.requester_name or 'Unknown' }}</td>
+                            <td data-label="Email">
+                                {% if sub.requester_email %}
+                                    <a href="mailto:{{ sub.requester_email }}" style="color: #3b82f6; text-decoration: none;">
+                                        {{ sub.requester_email }}
+                                    </a>
+                                {% else %}
+                                    <span class="no-file">Missing</span>
+                                {% endif %}
+                            </td>
+                            <td data-label="Mode">
+                                {% if sub.mode == 'after_ai' %}
+                                    After AI
+                                {% else %}
+                                    Human Only
+                                {% endif %}
+                            </td>
+                            <td data-label="Status">
+                                <span class="status-badge status-pending">{{ sub.status }}</span>
+                            </td>
+                            <td data-label="Submitted">{{ sub.created_at }}</td>
+                            <td data-label="Preview">
+                                <div style="max-width: 260px; word-wrap: break-word;">
+                                    {{ sub.preview or 'No text provided' }}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No Improve Requests Yet</h3>
+                    <p>Human correction requests will appear here once users submit them.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
 
         <!-- Reviews Table -->
         <div class="table-section" style="margin-top:24px">

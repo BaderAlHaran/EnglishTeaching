@@ -802,6 +802,7 @@ def admin():
     # Check if user is logged in
     if not session.get('admin_logged_in'):
         return redirect(url_for('login'))
+    _ensure_submissions_table()
     # Get statistics
     conn, cursor = _open_db()
     
@@ -814,6 +815,9 @@ def admin():
 
     cursor.execute("SELECT COUNT(*) FROM essay_submissions WHERE status = 'completed'")
     completed_submissions = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM submissions')
+    improve_total = cursor.fetchone()[0]
     
     # Get all submissions
     cursor.execute('''
@@ -821,6 +825,31 @@ def admin():
         ORDER BY created_at DESC
     ''')
     all_submissions = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT id, submission_id, created_at, mode, extracted_text, status,
+               requester_name, requester_email, requester_phone
+        FROM submissions
+        ORDER BY created_at DESC
+        LIMIT 25
+    ''')
+    improve_rows = cursor.fetchall()
+    improve_submissions = []
+    for row in improve_rows:
+        text_preview = row[4] or ''
+        if len(text_preview) > 160:
+            text_preview = text_preview[:160].rstrip() + "..."
+        improve_submissions.append({
+            'id': row[0],
+            'submission_id': row[1],
+            'created_at': row[2],
+            'mode': row[3],
+            'preview': text_preview,
+            'status': row[5],
+            'requester_name': row[6],
+            'requester_email': row[7],
+            'requester_phone': row[8]
+        })
 
     # Load reviews for admin dashboard
     cursor.execute('''
@@ -840,10 +869,18 @@ def admin():
     stats = {
         'total_submissions': total_submissions,
         'pending_submissions': pending_submissions,
-        'completed_submissions': completed_submissions
+        'completed_submissions': completed_submissions,
+        'improve_submissions': improve_total
     }
     
-    return render_template('admin.html', stats=stats, submissions=all_submissions, password_set=password_set, reviews=all_reviews)
+    return render_template(
+        'admin.html',
+        stats=stats,
+        submissions=all_submissions,
+        improve_submissions=improve_submissions,
+        password_set=password_set,
+        reviews=all_reviews
+    )
 
 @app.route('/admin/analytics')
 def admin_analytics():
@@ -1497,6 +1534,7 @@ def _ensure_submissions_table():
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS submissions (
                     id SERIAL PRIMARY KEY,
+                    submission_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     mode TEXT NOT NULL,
                     extracted_text TEXT NOT NULL,
@@ -1508,6 +1546,7 @@ def _ensure_submissions_table():
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS submissions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    submission_id TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     mode TEXT NOT NULL,
                     extracted_text TEXT NOT NULL,
@@ -1531,6 +1570,8 @@ def _ensure_submissions_table():
             cursor.execute('ALTER TABLE submissions ADD COLUMN requester_email TEXT')
         if 'requester_phone' not in columns:
             cursor.execute('ALTER TABLE submissions ADD COLUMN requester_phone TEXT')
+        if 'submission_id' not in columns:
+            cursor.execute('ALTER TABLE submissions ADD COLUMN submission_id TEXT')
         conn.commit()
     finally:
         conn.close()
@@ -2949,10 +2990,10 @@ def improve_human():
     file = request.files.get('file')
     provided_text = (request.form.get('extracted_text') or '').strip()
     ai_results_json = (request.form.get('ai_results_json') or '').strip()
-    require_contact = (request.form.get('require_contact') or '').strip() == '1'
     requester_name = (request.form.get('requester_name') or '').strip()
     requester_email = (request.form.get('requester_email') or '').strip()
     requester_phone = (request.form.get('requester_phone') or '').strip()
+    has_contact = bool(requester_name or requester_email or requester_phone or (request.form.get('require_contact') or '').strip())
 
     extracted_text = ''
     warning = None
@@ -2975,7 +3016,7 @@ def improve_human():
         extracted_text = text_input
 
     if not extracted_text:
-        if require_contact:
+        if has_contact:
             return render_template(
                 'improve_human_form.html',
                 extracted_text='',
@@ -2985,21 +3026,20 @@ def improve_human():
                 requester_phone=requester_phone,
                 error="Please provide the text you want corrected."
             )
-        else:
-            return render_template(
-                'improve.html',
-                ai_result=None,
-                highlighted_text=None,
-                extracted_text=None,
-                error="Please paste text or upload a file.",
-                ai_results_json=None,
-                human_notice=None,
-                **_improve_context()
-            )
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error="Please paste text or upload a file.",
+            ai_results_json=None,
+            human_notice=None,
+            **_improve_context()
+        )
 
     if len(extracted_text) > IMPROVE_MAX_CHARS:
         error_message = f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer."
-        if require_contact:
+        if has_contact:
             return render_template(
                 'improve_human_form.html',
                 extracted_text=extracted_text,
@@ -3009,46 +3049,46 @@ def improve_human():
                 requester_phone=requester_phone,
                 error=error_message
             )
-        else:
-            return render_template(
-                'improve.html',
-                ai_result=None,
-                highlighted_text=None,
-                extracted_text=None,
-                error=error_message,
-                ai_results_json=None,
-                human_notice=None,
-                **_improve_context()
-            )
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error=error_message,
+            ai_results_json=None,
+            human_notice=None,
+            **_improve_context()
+        )
 
-    if require_contact:
-        if not requester_name or not requester_email:
-            return render_template(
-                'improve_human_form.html',
-                extracted_text=extracted_text,
-                ai_results_json=ai_results_json,
-                requester_name=requester_name,
-                requester_email=requester_email,
-                requester_phone=requester_phone,
-                error="Please enter your name and email address."
-            )
-        if not EMAIL_REGEX.match(requester_email):
-            return render_template(
-                'improve_human_form.html',
-                extracted_text=extracted_text,
-                ai_results_json=ai_results_json,
-                requester_name=requester_name,
-                requester_email=requester_email,
-                requester_phone=requester_phone,
-                error="Please enter a valid email address."
-            )
+    if not requester_name or not requester_email:
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=extracted_text,
+            ai_results_json=ai_results_json,
+            requester_name=requester_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error="Please enter your name and email address."
+        )
+    if not EMAIL_REGEX.match(requester_email):
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=extracted_text,
+            ai_results_json=ai_results_json,
+            requester_name=requester_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error="Please enter a valid email address."
+        )
 
     mode = 'after_ai' if ai_results_json else 'human_only'
+    submission_id = secrets.token_hex(8)
     _ensure_submissions_table()
     conn, cursor = _open_db()
     try:
         cursor.execute('''
             INSERT INTO submissions (
+                submission_id,
                 mode,
                 extracted_text,
                 ai_results_json,
@@ -3057,8 +3097,9 @@ def improve_human():
                 requester_email,
                 requester_phone
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
+            submission_id,
             mode,
             extracted_text,
             ai_results_json or None,
@@ -3071,9 +3112,322 @@ def improve_human():
     finally:
         conn.close()
 
-    notice = "Submitted for human review."
+    name_parts = requester_name.split()
+    first_name = name_parts[0] if name_parts else "Improve"
+    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Request"
+    word_count = len(re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", extracted_text))
+    pages = max(1, int(math.ceil(word_count / 250))) if word_count else 1
+    deadline = datetime.utcnow().isoformat(timespec='minutes')
+    essay_data = {
+        'submission_id': submission_id,
+        'first_name': first_name,
+        'last_name': last_name,
+        'email': requester_email,
+        'phone': requester_phone,
+        'essay_type': 'Editing',
+        'academic_level': 'Other',
+        'subject': 'Writing correction',
+        'pages': str(pages),
+        'deadline': deadline,
+        'topic': 'Human correction request',
+        'instructions': extracted_text,
+        'citation_style': 'N/A',
+        'writer_preference': 'N/A',
+        'sources': 'N/A',
+        'newsletter': ''
+    }
+
+    conn, cursor = _open_db()
+    try:
+        cursor.execute('''
+            INSERT INTO essay_submissions 
+            (submission_id, first_name, last_name, email, phone, essay_type, academic_level, 
+             subject, pages, deadline, topic, instructions, citation_style, file_path, file_name, file_size)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            essay_data['submission_id'],
+            essay_data['first_name'],
+            essay_data['last_name'],
+            essay_data['email'],
+            essay_data['phone'],
+            essay_data['essay_type'],
+            essay_data['academic_level'],
+            essay_data['subject'],
+            essay_data['pages'],
+            essay_data['deadline'],
+            essay_data['topic'],
+            essay_data['instructions'],
+            essay_data['citation_style'],
+            None,
+            None,
+            None
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+    admin_recipient = ADMIN_EMAIL or CONTACT_RECIPIENT
+    admin_body_lines = [
+        "New essay submission received.",
+        f"Submission ID: {essay_data['submission_id']}",
+        f"Name: {requester_name or 'N/A'}",
+        f"Email: {requester_email}",
+        f"Phone: {requester_phone or 'N/A'}",
+        f"Essay Type: {essay_data['essay_type']}",
+        f"Academic Level: {essay_data['academic_level']}",
+        f"Subject: {essay_data['subject']}",
+        f"Pages: {essay_data['pages']}",
+        f"Deadline: {essay_data['deadline']}",
+        f"Topic: {essay_data['topic']}",
+        f"Citation Style: {essay_data['citation_style']}",
+        f"Writer Preference: {essay_data['writer_preference']}",
+        f"Required Sources: {essay_data['sources']}",
+        f"Newsletter Opt-in: {'Yes' if essay_data.get('newsletter') else 'No'}",
+        "File Uploaded: No file",
+        "",
+        "Instructions:",
+        essay_data['instructions'] or 'None provided'
+    ]
+    admin_ok, admin_err = _send_email(
+        to_email=admin_recipient,
+        subject="New submission received",
+        body="\n".join(admin_body_lines),
+        reply_to=requester_email or None
+    )
+    if not admin_ok:
+        app.logger.error("Admin notification email failed for improve submission: %s", admin_err)
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=extracted_text,
+            ai_results_json=ai_results_json,
+            requester_name=requester_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error=admin_err or "Unable to send confirmation emails right now. Please try again shortly."
+        )
+
+    student_name = requester_name or "there"
+    student_ok, student_err = _send_email(
+        to_email=requester_email,
+        subject=f"Submission received: {essay_data['submission_id']}",
+        body=(
+            f"Hello {student_name},\n\n"
+            f"We've received your request (ID: {essay_data['submission_id']}).\n"
+            f"Current status: pending. We'll email you when the status changes.\n\n"
+            f"Summary:\n"
+            f"- Type: {essay_data['essay_type']}\n"
+            f"- Subject: {essay_data['subject']}\n"
+            f"- Pages: {essay_data['pages']}\n"
+            f"- Deadline: {essay_data['deadline']}\n\n"
+            f"Thank you,\nEnglish Essay Writing Team"
+        ),
+        reply_to=ADMIN_EMAIL or FROM_EMAIL
+    )
+    if not student_ok:
+        app.logger.warning("User confirmation email failed for improve submission: %s", student_err)
+
+    notice = f"Submitted for human review. Your request ID is {submission_id}."
     if warning:
         notice = f"{notice} {warning}"
+    return render_template(
+        'improve.html',
+        ai_result=None,
+        highlighted_text=None,
+        extracted_text=None,
+        error=None,
+        ai_results_json=None,
+        human_notice=notice,
+        prefill_text='',
+        **_improve_context()
+    )
+
+@app.route('/improve/human/submit', methods=['POST'])
+def improve_human_submit():
+    if request.form.get('website'):
+        app.logger.info("Honeypot field triggered; ignoring improve submission.")
+        return render_template(
+            'improve.html',
+            ai_result=None,
+            highlighted_text=None,
+            extracted_text=None,
+            error=None,
+            ai_results_json=None,
+            human_notice="Submitted for human review.",
+            prefill_text='',
+            **_improve_context()
+        )
+
+    full_name = (request.form.get('fullName') or '').strip()
+    requester_email = (request.form.get('email') or '').strip()
+    requester_phone = (request.form.get('phone') or '').strip()
+    instructions = (request.form.get('instructions') or '').strip()
+    terms = request.form.get('terms')
+
+    if not full_name or not requester_email or not instructions:
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=instructions,
+            requester_name=full_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error="Please fill in all required fields."
+        )
+
+    if not EMAIL_REGEX.match(requester_email):
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=instructions,
+            requester_name=full_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error="Please enter a valid email address."
+        )
+
+    if not terms:
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=instructions,
+            requester_name=full_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error="Please accept the terms and conditions."
+        )
+
+    if len(instructions) > IMPROVE_MAX_CHARS:
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=instructions,
+            requester_name=full_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error=f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer."
+        )
+
+    name_parts = full_name.split()
+    first_name = name_parts[0] if name_parts else "Improve"
+    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Request"
+    word_count = len(re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", instructions))
+    pages = max(1, int(math.ceil(word_count / 250))) if word_count else 1
+    deadline = datetime.utcnow().isoformat(timespec='minutes')
+    submission_id = secrets.token_hex(8)
+
+    _ensure_submissions_table()
+    conn, cursor = _open_db()
+    try:
+        cursor.execute('''
+            INSERT INTO submissions (
+                submission_id,
+                mode,
+                extracted_text,
+                ai_results_json,
+                status,
+                requester_name,
+                requester_email,
+                requester_phone
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            submission_id,
+            'human_only',
+            instructions,
+            None,
+            'new',
+            full_name,
+            requester_email,
+            requester_phone or None
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+    conn, cursor = _open_db()
+    try:
+        cursor.execute('''
+            INSERT INTO essay_submissions 
+            (submission_id, first_name, last_name, email, phone, essay_type, academic_level, 
+             subject, pages, deadline, topic, instructions, citation_style, file_path, file_name, file_size)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            submission_id,
+            first_name,
+            last_name,
+            requester_email,
+            requester_phone or None,
+            'Editing',
+            'Other',
+            'Writing correction',
+            str(pages),
+            deadline,
+            'Human correction request',
+            instructions,
+            'N/A',
+            None,
+            None,
+            None
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+    admin_recipient = ADMIN_EMAIL or CONTACT_RECIPIENT
+    admin_body_lines = [
+        "New essay submission received.",
+        f"Submission ID: {submission_id}",
+        f"Name: {full_name}",
+        f"Email: {requester_email}",
+        f"Phone: {requester_phone or 'N/A'}",
+        "Essay Type: Editing",
+        "Academic Level: Other",
+        "Subject: Writing correction",
+        f"Pages: {pages}",
+        f"Deadline: {deadline}",
+        "Topic: Human correction request",
+        "Citation Style: N/A",
+        "Writer Preference: N/A",
+        "Required Sources: N/A",
+        "Newsletter Opt-in: No",
+        "File Uploaded: No file",
+        "",
+        "Instructions:",
+        instructions or 'None provided'
+    ]
+    admin_ok, admin_err = _send_email(
+        to_email=admin_recipient,
+        subject="New submission received",
+        body="\n".join(admin_body_lines),
+        reply_to=requester_email
+    )
+    if not admin_ok:
+        app.logger.error("Admin notification email failed for improve submission: %s", admin_err)
+        return render_template(
+            'improve_human_form.html',
+            extracted_text=instructions,
+            requester_name=full_name,
+            requester_email=requester_email,
+            requester_phone=requester_phone,
+            error=admin_err or "Unable to send confirmation emails right now. Please try again shortly."
+        )
+
+    student_ok, student_err = _send_email(
+        to_email=requester_email,
+        subject=f"Submission received: {submission_id}",
+        body=(
+            f"Hello {full_name},\n\n"
+            f"We've received your request (ID: {submission_id}).\n"
+            "Current status: pending. We'll email you when the status changes.\n\n"
+            "Summary:\n"
+            "- Type: Editing\n"
+            "- Subject: Writing correction\n"
+            f"- Pages: {pages}\n"
+            f"- Deadline: {deadline}\n\n"
+            "Thank you,\nEnglish Essay Writing Team"
+        ),
+        reply_to=ADMIN_EMAIL or FROM_EMAIL
+    )
+    if not student_ok:
+        app.logger.warning("User confirmation email failed for improve submission: %s", student_err)
+
+    notice = f"Submitted for human review. Your request ID is {submission_id}."
     return render_template(
         'improve.html',
         ai_result=None,
@@ -3092,7 +3446,7 @@ def admin_submissions():
     _ensure_submissions_table()
     conn, cursor = _open_db()
     cursor.execute('''
-        SELECT id, created_at, mode, extracted_text, ai_results_json, status,
+        SELECT id, submission_id, created_at, mode, extracted_text, ai_results_json, status,
                requester_name, requester_email, requester_phone
         FROM submissions
         ORDER BY created_at DESC
@@ -3104,14 +3458,15 @@ def admin_submissions():
     for row in rows:
         submissions.append({
             'id': row[0],
-            'created_at': row[1],
-            'mode': row[2],
-            'extracted_text': row[3],
-            'ai_results_json': row[4],
-            'status': row[5],
-            'requester_name': row[6],
-            'requester_email': row[7],
-            'requester_phone': row[8]
+            'submission_id': row[1],
+            'created_at': row[2],
+            'mode': row[3],
+            'extracted_text': row[4],
+            'ai_results_json': row[5],
+            'status': row[6],
+            'requester_name': row[7],
+            'requester_email': row[8],
+            'requester_phone': row[9]
         })
     return render_template('admin_submissions.html', submissions=submissions)
 

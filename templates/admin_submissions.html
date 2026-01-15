@@ -192,6 +192,10 @@
                         <td data-label="Details">
                             <details>
                                 <summary>View text</summary>
+                                {% if sub.submission_id %}
+                                    <div class="page-subtitle" style="margin-top: 8px;">Submission ID</div>
+                                    <div><strong>{{ sub.submission_id|e }}</strong></div>
+                                {% endif %}
                                 {% if sub.requester_name or sub.requester_email or sub.requester_phone %}
                                     <div class="page-subtitle" style="margin-top: 8px;">Requester</div>
                                     {% if sub.requester_name %}
