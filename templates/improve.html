@@ -102,6 +102,17 @@
             align-items: center;
             gap: var(--space-1);
         }
+        .improve-actions {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .improve-actions__note {
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+            margin-top: var(--space-3);
+        }
         .improve-side {
             display: grid;
             gap: var(--space-4);
@@ -338,7 +349,11 @@
                             <input class="improve-file" id="ai-file" type="file" name="file" accept=".pdf,.docx">
                             <span class="form__help">Maximum file size: 10MB.</span>
                         </div>
-                        <button class="btn btn--primary" type="submit">Run Check</button>
+                        <div class="improve-actions">
+                            <button class="btn btn--primary" type="submit" name="mode" value="standard">Run Check</button>
+                            <button class="btn btn--secondary" type="submit" name="mode" value="deep">Deep Check (GECToR)</button>
+                        </div>
+                        <div class="improve-actions__note">Deep Check is optional and limited to {{ deep_max_chars|default(2000, true) }} characters.</div>
                     </form>
 
                     {% if ai_result %}
@@ -395,6 +410,7 @@
                     <div class="improve-card improve-card--soft">
                         <h4 class="improve-side__title">Good to know</h4>
                         <p class="improve-tip">Maximum length: {{ max_chars|default(10000, true) }} characters.</p>
+                        <p class="improve-tip">Deep Check limit: {{ deep_max_chars|default(2000, true) }} characters.</p>
                         <p class="improve-tip">Need expert help? Send your draft for human correction after the check.</p>
                     </div>
                 </div>
