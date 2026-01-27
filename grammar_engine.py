@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 from typing import List
 
 import torch
@@ -12,29 +13,30 @@ PREFIX = "gec: "
 _MODEL = None
 _TOKENIZER = None
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+_MODEL_LOCK = threading.Lock()
 
 
 def _load_model():
     global _MODEL, _TOKENIZER
     if _MODEL is not None and _TOKENIZER is not None:
         return
-    if not os.path.isdir(MODEL_PATH):
-        raise RuntimeError(f"Model path not found: {MODEL_PATH}")
-    print(f"[grammar_engine] BASE_DIR={_BASE_DIR}")
-    print(f"[grammar_engine] MODEL_PATH={MODEL_PATH}")
-    print(f"[grammar_engine] MODEL_PATH exists={os.path.isdir(MODEL_PATH)}")
-    try:
-        files = os.listdir(MODEL_PATH)
-        print(f"[grammar_engine] MODEL_PATH files={files[:10]}")
-    except Exception as exc:
-        print(f"[grammar_engine] MODEL_PATH list failed: {exc}")
-    _TOKENIZER = T5Tokenizer.from_pretrained(MODEL_PATH)
-    _MODEL = T5ForConditionalGeneration.from_pretrained(MODEL_PATH)
-    _MODEL.to(_DEVICE)
-    _MODEL.eval()
-
-
-_load_model()
+    with _MODEL_LOCK:
+        if _MODEL is not None and _TOKENIZER is not None:
+            return
+        if not os.path.isdir(MODEL_PATH):
+            raise RuntimeError(f"Model path not found: {MODEL_PATH}")
+        print(f"[grammar_engine] BASE_DIR={_BASE_DIR}")
+        print(f"[grammar_engine] MODEL_PATH={MODEL_PATH}")
+        print(f"[grammar_engine] MODEL_PATH exists={os.path.isdir(MODEL_PATH)}")
+        try:
+            files = os.listdir(MODEL_PATH)
+            print(f"[grammar_engine] MODEL_PATH files={files[:10]}")
+        except Exception as exc:
+            print(f"[grammar_engine] MODEL_PATH list failed: {exc}")
+        _TOKENIZER = T5Tokenizer.from_pretrained(MODEL_PATH)
+        _MODEL = T5ForConditionalGeneration.from_pretrained(MODEL_PATH)
+        _MODEL.to(_DEVICE)
+        _MODEL.eval()
 
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
@@ -52,6 +54,7 @@ def _split_sentences(text: str) -> List[str]:
 
 
 def _chunk_sentences(sentences: List[str], max_chars: int = _CHUNK_MAX_CHARS) -> List[str]:
+    _load_model()
     if not sentences:
         return []
     prefix_tokens = len(_TOKENIZER.encode(PREFIX, add_special_tokens=False))
@@ -126,6 +129,7 @@ def _chunk_sentences(sentences: List[str], max_chars: int = _CHUNK_MAX_CHARS) ->
 
 
 def _correct_chunk(text: str) -> str:
+    _load_model()
     if not text.strip():
         return text
     prefixed = PREFIX + text.strip()
@@ -150,6 +154,7 @@ def _correct_chunk(text: str) -> str:
 
 
 def correct_long_text(text: str) -> str:
+    _load_model()
     if text is None:
         return ""
     raw = text.strip()
