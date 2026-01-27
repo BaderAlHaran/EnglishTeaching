@@ -20,6 +20,14 @@ def _load_model():
         return
     if not os.path.isdir(MODEL_PATH):
         raise RuntimeError(f"Model path not found: {MODEL_PATH}")
+    print(f"[grammar_engine] BASE_DIR={_BASE_DIR}")
+    print(f"[grammar_engine] MODEL_PATH={MODEL_PATH}")
+    print(f"[grammar_engine] MODEL_PATH exists={os.path.isdir(MODEL_PATH)}")
+    try:
+        files = os.listdir(MODEL_PATH)
+        print(f"[grammar_engine] MODEL_PATH files={files[:10]}")
+    except Exception as exc:
+        print(f"[grammar_engine] MODEL_PATH list failed: {exc}")
     _TOKENIZER = T5Tokenizer.from_pretrained(MODEL_PATH)
     _MODEL = T5ForConditionalGeneration.from_pretrained(MODEL_PATH)
     _MODEL.to(_DEVICE)
