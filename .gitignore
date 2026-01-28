@@ -1,5 +1,3 @@
 __pycache__/
 *.pyc
 settings.json
-grammar_model/
-grammar_model.7z

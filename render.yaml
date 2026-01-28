@@ -3,18 +3,8 @@ services:
     name: essay-writing-service
     env: python
     pythonVersion: 3.11.9
-    buildCommand: |
-      apt-get update && apt-get install -y p7zip-full
-      pip install -r requirements.txt
-      pip install gdown
-      echo "Downloading grammar model..."
-      gdown "https://drive.google.com/uc?id=1NfUxs8UBJNmqOfV2k_5NAZLyAnPjDr6B" -O /opt/render/project/src/grammar_model.7z
-      echo "Creating grammar_model directory..."
-      mkdir -p /opt/render/project/src/grammar_model
-      echo "Extracting grammar model..."
-      7z x /opt/render/project/src/grammar_model.7z -o/opt/render/project/src/grammar_model
-      echo "Listing extracted files:"
-      ls -la /opt/render/project/src/grammar_model
+<<<<<<< HEAD
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT
     plan: free
     envVars:
