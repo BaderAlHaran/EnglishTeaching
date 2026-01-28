@@ -5,8 +5,7 @@ from typing import List
 import torch
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(_BASE_DIR, "grammar_model")
+MODEL_PATH = "grammar_model"
 PREFIX = "gec: "
 
 _MODEL = None
