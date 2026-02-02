@@ -491,6 +491,10 @@ def index():
 def about():
     return send_from_directory('.', 'about.html')
 
+@app.route('/free-essay-writing-help')
+def free_essay_writing_help():
+    return send_from_directory('.', 'free-essay-writing-help.html')
+
 @app.route('/essay-form')
 def essay_form():
     return send_from_directory('.', 'essay-form.html')
