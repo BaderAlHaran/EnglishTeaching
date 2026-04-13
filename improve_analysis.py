@@ -18,6 +18,173 @@ _IMPROVE_NLP = None
 _IMPROVE_ALLOWLIST_CACHE = None
 _IMPROVE_SYMSPELL = None
 
+
+def _count_word_tokens(text):
+    return len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
+
+
+def _build_ignored_spans(text):
+    email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
+    url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
+    ignored_spans = [(m.start(), m.end()) for m in email_pattern.finditer(text)]
+    ignored_spans += [(m.start(), m.end()) for m in url_pattern.finditer(text)]
+    return ignored_spans
+
+
+def _overlaps_spans(start, end, spans):
+    for span_start, span_end in spans:
+        if start < span_end and end > span_start:
+            return True
+    return False
+
+
+def _sentence_id_for_span(start, end, sentences):
+    for sentence in sentences:
+        if start >= sentence['start'] and end <= sentence['end']:
+            return sentence['id']
+    return None
+
+
+def _append_issue(issues, text_length, start, end, kind, message, suggestions=None, no_highlight=False, sentence_id=None, is_rewrite=False):
+    if start is None or end is None:
+        return
+    if start < 0 or end <= start or start > text_length:
+        return
+    issues.append({
+        'start': start,
+        'end': end,
+        'kind': kind,
+        'message': message,
+        'suggestions': suggestions or [],
+        'sentence_id': sentence_id,
+        'no_highlight': no_highlight,
+        'is_rewrite': is_rewrite
+    })
+
+
+def _dedupe_issues(items):
+    def _kind_priority(issue):
+        kind = issue.get('kind')
+        if kind == 'spelling':
+            return 0
+        if kind == 'grammar':
+            return 1
+        return 2
+
+    def _highlight_priority(issue):
+        if issue.get('no_highlight'):
+            return (-1, -1, -1, issue.get('start', 0), issue.get('end', 0))
+        span_length = (issue.get('end', 0) or 0) - (issue.get('start', 0) or 0)
+        has_suggestions = 0 if issue.get('suggestions') else 1
+        span_bucket = 0 if span_length <= 12 else 1 if span_length <= 32 else 2
+        return (_kind_priority(issue), has_suggestions, span_bucket, span_length, issue.get('start', 0))
+
+    seen = set()
+    result = []
+    for item in sorted(items, key=lambda issue: (issue['start'], -(issue['end'] - issue['start']))):
+        key = (item['start'], item['end'], item['kind'], item['message'])
+        if key in seen:
+            continue
+        if item.get('no_highlight'):
+            seen.add(key)
+            result.append(item)
+            continue
+        if result:
+            previous = result[-1]
+            if not previous.get('no_highlight') and item['start'] < previous['end']:
+                if _highlight_priority(item) < _highlight_priority(previous):
+                    result[-1] = item
+                    seen.add(key)
+                continue
+        seen.add(key)
+        result.append(item)
+    return result
+
+
+def _build_summary(issues):
+    return {
+        'spelling': sum(1 for issue in issues if issue['kind'] == 'spelling' and not issue.get('no_highlight')),
+        'grammar': sum(1 for issue in issues if issue['kind'] == 'grammar' and not issue.get('no_highlight')),
+        'style': sum(1 for issue in issues if issue['kind'] == 'style' and not issue.get('no_highlight') and not issue.get('is_rewrite'))
+    }
+
+
+def _build_stats(sentences, token_count, text):
+    sentence_count = len(sentences)
+    if sentence_count == 0 and text.strip():
+        sentence_count = max(1, len(re.findall(r'[.!?]+', text)))
+    word_count = token_count
+    return {
+        'word_count': word_count,
+        'sentence_count': sentence_count,
+        'read_time_minutes': int(math.ceil(word_count / 200)) if word_count else 0
+    }
+
+
+def _build_sentence_records(text, doc, end_punct_count, token_count, preprocess_sentences):
+    sentences = []
+    sentence_flags = {}
+    doc_sentences = {}
+
+    if doc is not None:
+        for sent in doc.sents:
+            segment = sent.text
+            if segment.strip():
+                sent_id = len(sentences) + 1
+                sentences.append({
+                    'id': sent_id,
+                    'start': sent.start_char,
+                    'end': sent.end_char,
+                    'text': segment.strip()
+                })
+                doc_sentences[sent_id] = sent
+        sentence_flags = {sentence['id']: set() for sentence in sentences}
+    else:
+        sentence_start = 0
+        for match in re.finditer(r'[.!?]+', text):
+            sentence_end = match.end()
+            segment = text[sentence_start:sentence_end]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': sentence_start,
+                    'end': sentence_end,
+                    'text': segment.strip()
+                })
+            sentence_start = sentence_end
+        if sentence_start < len(text):
+            segment = text[sentence_start:]
+            if segment.strip():
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': sentence_start,
+                    'end': len(text),
+                    'text': segment.strip()
+                })
+        sentence_flags = {sentence['id']: set() for sentence in sentences}
+
+    if end_punct_count < 2 and token_count > 12:
+        pseudo_sentences = preprocess_sentences(text)
+        if pseudo_sentences:
+            offset = 0
+            sentences = []
+            for segment in pseudo_sentences:
+                start = text.find(segment, offset)
+                if start == -1:
+                    start = offset
+                end = start + len(segment)
+                sentences.append({
+                    'id': len(sentences) + 1,
+                    'start': start,
+                    'end': end,
+                    'text': segment.strip()
+                })
+                offset = end
+            sentence_flags = {sentence['id']: set() for sentence in sentences}
+            doc_sentences = {}
+
+    return sentences, sentence_flags, doc_sentences
+
 def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, logger=None):
     logger = logger or logging.getLogger(__name__)
     if not AI_CHECKER_ENABLED:
@@ -130,40 +297,26 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     if progress_cb:
         progress_cb(8, "Preparing checks...")
 
-    email_pattern = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w+\b')
-    url_pattern = re.compile(r'\b(?:https?://|www\.)\S+\b')
     end_punct_count = len(re.findall(r'[.!?]', text))
-    token_count = len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
-    ignored_spans = [(m.start(), m.end()) for m in email_pattern.finditer(text)]
-    ignored_spans += [(m.start(), m.end()) for m in url_pattern.finditer(text)]
+    token_count = _count_word_tokens(text)
+    ignored_spans = _build_ignored_spans(text)
 
     def _overlaps_ignored(start, end):
-        for s, e in ignored_spans:
-            if start < e and end > s:
-                return True
-        return False
-
-    def _sentence_id_for_span(start, end, sentences):
-        for s in sentences:
-            if start >= s['start'] and end <= s['end']:
-                return s['id']
-        return None
+        return _overlaps_spans(start, end, ignored_spans)
 
     def _add_issue(start, end, kind, message, suggestions=None, no_highlight=False, sentence_id=None, is_rewrite=False):
-        if start is None or end is None:
-            return
-        if start < 0 or end <= start or start > len(text):
-            return
-        issues.append({
-            'start': start,
-            'end': end,
-            'kind': kind,
-            'message': message,
-            'suggestions': suggestions or [],
-            'sentence_id': sentence_id,
-            'no_highlight': no_highlight,
-            'is_rewrite': is_rewrite
-        })
+        _append_issue(
+            issues,
+            len(text),
+            start,
+            end,
+            kind,
+            message,
+            suggestions=suggestions,
+            no_highlight=no_highlight,
+            sentence_id=sentence_id,
+            is_rewrite=is_rewrite
+        )
 
     def _is_code_like(word):
         return any(sym in word for sym in ('_', '/', '\\', '::', '->', '=>', '()')) or (word[:1].islower() and any(ch.isupper() for ch in word[1:]))
@@ -288,65 +441,13 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
             doc = None
             warnings.append(f"NLP processing failed: {exc}")
 
-    sentences = []
-    sentence_flags = {}
-    doc_sentences = {}
-
-    if doc is not None:
-        for sent in doc.sents:
-            segment = sent.text
-            if segment.strip():
-                sent_id = len(sentences) + 1
-                sentences.append({
-                    'id': sent_id,
-                    'start': sent.start_char,
-                    'end': sent.end_char,
-                    'text': segment.strip()
-                })
-                doc_sentences[sent_id] = sent
-        sentence_flags = {s['id']: set() for s in sentences}
-    else:
-        s_start = 0
-        for match in re.finditer(r'[.!?]+', text):
-            s_end = match.end()
-            segment = text[s_start:s_end]
-            if segment.strip():
-                sentences.append({
-                    'id': len(sentences) + 1,
-                    'start': s_start,
-                    'end': s_end,
-                    'text': segment.strip()
-                })
-            s_start = s_end
-        if s_start < len(text):
-            segment = text[s_start:]
-            if segment.strip():
-                sentences.append({
-                    'id': len(sentences) + 1,
-                    'start': s_start,
-                    'end': len(text),
-                    'text': segment.strip()
-                })
-        sentence_flags = {s['id']: set() for s in sentences}
-
-    if end_punct_count < 2 and token_count > 12:
-        pseudo = _preprocess_sentences(text)
-        if pseudo:
-            offset = 0
-            sentences = []
-            for segment in pseudo:
-                start = text.find(segment, offset)
-                if start == -1:
-                    start = offset
-                end = start + len(segment)
-                sentences.append({
-                    'id': len(sentences) + 1,
-                    'start': start,
-                    'end': end,
-                    'text': segment.strip()
-                })
-                offset = end
-            sentence_flags = {s['id']: set() for s in sentences}
+    sentences, sentence_flags, doc_sentences = _build_sentence_records(
+        text,
+        doc,
+        end_punct_count,
+        token_count,
+        _preprocess_sentences
+    )
 
     if progress_cb:
         progress_cb(18, "Checking grammar...")
@@ -812,25 +913,6 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
                 if _is_structural_rewrite(original, suggestion):
                     _add_issue(sentence['start'], sentence['end'], 'style', suggestion, [], no_highlight=True, sentence_id=sid, is_rewrite=True)
 
-    def _dedupe_issues(items):
-        seen = set()
-        result = []
-        last_end = -1
-        for item in sorted(items, key=lambda i: (i['start'], -(i['end'] - i['start']))):
-            key = (item['start'], item['end'], item['kind'], item['message'])
-            if key in seen:
-                continue
-            if item.get('no_highlight'):
-                seen.add(key)
-                result.append(item)
-                continue
-            if item['start'] < last_end:
-                continue
-            seen.add(key)
-            result.append(item)
-            last_end = item['end']
-        return result
-
     issues = _dedupe_issues(issues)
 
     if progress_cb:
@@ -839,28 +921,11 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     for idx, issue in enumerate(issues, start=1):
         issue.setdefault('issue_id', f'issue-{idx}')
 
-    summary = {
-        'spelling': sum(1 for i in issues if i['kind'] == 'spelling' and not i.get('no_highlight')),
-        'grammar': sum(1 for i in issues if i['kind'] == 'grammar' and not i.get('no_highlight')),
-        'style': sum(1 for i in issues if i['kind'] == 'style' and not i.get('no_highlight') and not i.get('is_rewrite'))
-    }
-
-    sentence_count = len(sentences)
-    if sentence_count == 0 and text.strip():
-        sentence_count = max(1, len(re.findall(r'[.!?]+', text)))
-
-    word_count = token_count
-    read_time_minutes = int(math.ceil(word_count / 200)) if word_count else 0
-
+    summary = _build_summary(issues)
+    stats = _build_stats(sentences, token_count, text)
     rewrite_count = sum(1 for i in issues if i.get('is_rewrite'))
     issue_total = summary['spelling'] + summary['grammar'] + summary['style'] + rewrite_count
     score = max(35, min(100, 100 - (issue_total * 2)))
-
-    stats = {
-        'word_count': word_count,
-        'sentence_count': sentence_count,
-        'read_time_minutes': read_time_minutes
-    }
 
     warning = '; '.join(warnings) if warnings else None
     return {

@@ -1,5 +1,7 @@
 import re
 
+import improve_analysis
+
 
 def extract_csrf_token(response):
     body = response.data.decode("utf-8")
@@ -82,6 +84,90 @@ def test_submit_review_rejects_missing_required_field(client):
 
     assert response.status_code == 400
     assert b"university is required" in response.data
+
+
+def test_checker_dedupe_prefers_tighter_grammar_issue():
+    issues = [
+        {
+            "start": 0,
+            "end": 28,
+            "kind": "style",
+            "message": "Long sentence; consider splitting it.",
+            "suggestions": [],
+        },
+        {
+            "start": 10,
+            "end": 15,
+            "kind": "grammar",
+            "message": "Use the correct verb form.",
+            "suggestions": ["is"],
+        },
+    ]
+
+    deduped = improve_analysis._dedupe_issues(issues)
+
+    assert len(deduped) == 1
+    assert deduped[0]["kind"] == "grammar"
+    assert deduped[0]["start"] == 10
+    assert deduped[0]["end"] == 15
+
+
+def test_checker_dedupe_keeps_non_highlight_rewrite():
+    issues = [
+        {
+            "start": 0,
+            "end": 12,
+            "kind": "style",
+            "message": "Rewrite suggestion",
+            "suggestions": [],
+            "no_highlight": True,
+            "is_rewrite": True,
+        },
+        {
+            "start": 0,
+            "end": 4,
+            "kind": "grammar",
+            "message": "Capitalize this word.",
+            "suggestions": ["This"],
+        },
+    ]
+
+    deduped = improve_analysis._dedupe_issues(issues)
+
+    assert len(deduped) == 2
+    assert any(issue.get("no_highlight") for issue in deduped)
+    assert any(issue["kind"] == "grammar" for issue in deduped)
+
+
+def test_checker_flags_subject_verb_agreement_issue():
+    result, error, warning = improve_analysis.run_local_analysis("He go to school every day.")
+
+    assert error is None
+    assert result is not None
+    assert any(
+        issue["kind"] == "grammar" and "third-person singular" in issue["message"].lower()
+        for issue in result["issues"]
+    )
+
+
+def test_checker_flags_repeated_word_issue():
+    result, error, warning = improve_analysis.run_local_analysis("This is is a simple sentence.")
+
+    assert error is None
+    assert result is not None
+    assert any(
+        issue["kind"] == "style" and "repeated word" in issue["message"].lower()
+        for issue in result["issues"]
+    )
+
+
+def test_checker_handles_clean_sentence_without_crashing():
+    result, error, warning = improve_analysis.run_local_analysis("This is a clear sentence with proper punctuation.")
+
+    assert error is None
+    assert result is not None
+    assert isinstance(result["issues"], list)
+    assert "summary" in result
 
 
 def test_improve_requires_text_or_file(client):
