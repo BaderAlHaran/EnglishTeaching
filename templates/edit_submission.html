@@ -26,6 +26,7 @@
         <main class="admin-main">
             <div class="edit-form-container">
                 <form method="POST" class="edit-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="form-section">
                         <h3>Submission Details</h3>
                         <div class="form-row">

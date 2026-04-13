@@ -17,11 +17,17 @@
     <link rel="alternate icon" href="/favicon.ico">
 
     <style>
+        .improve-results-page {
+            --improve-green-soft: rgba(39, 174, 96, 0.08);
+            --improve-blue-soft: rgba(37, 99, 235, 0.08);
+            --improve-amber-soft: rgba(245, 158, 11, 0.1);
+        }
         .improve-hero {
             padding: calc(70px + var(--space-24)) 0 var(--space-12);
             background: radial-gradient(circle at top, rgba(39, 174, 96, 0.08), transparent 45%),
                 linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
             text-align: center;
+            border-bottom: 1px solid var(--gray-200);
         }
         .improve-hero__title {
             font-family: var(--font-primary);
@@ -29,6 +35,7 @@
             font-weight: 700;
             color: var(--text-primary);
             margin-bottom: var(--space-2);
+            letter-spacing: -0.02em;
         }
         .improve-section {
             padding: var(--space-20) 0 var(--space-24);
@@ -40,6 +47,8 @@
             padding: var(--space-10);
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--gray-200);
+            position: relative;
+            overflow: hidden;
         }
         .improve-workspace {
             display: grid;
@@ -57,6 +66,8 @@
             border-radius: var(--radius-2xl);
             padding: var(--space-6);
             box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
         }
         .improve-score {
             font-family: var(--font-primary);
@@ -82,7 +93,7 @@
             gap: var(--space-3);
         }
         .improve-stat {
-            background: var(--white);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 0.94));
             border-radius: var(--radius-lg);
             padding: var(--space-4);
             border: 1px solid var(--gray-200);
@@ -110,7 +121,8 @@
             padding: var(--space-1) var(--space-3);
             border-radius: var(--radius-full);
             font-size: var(--fs-sm);
-            background: var(--gray-100);
+            background: linear-gradient(180deg, var(--gray-100), var(--white));
+            border: 1px solid var(--gray-200);
         }
         .improve-legend-swatch {
             width: 14px;
@@ -152,22 +164,24 @@
             padding: var(--space-2) var(--space-4);
             border-radius: var(--radius-full);
             border: 1px solid var(--gray-300);
-            background: var(--gray-100);
+            background: linear-gradient(180deg, var(--gray-100), var(--white));
             font-weight: 600;
             transition: all var(--transition-fast);
         }
         .improve-copy:hover {
             border-color: var(--accent-color);
             color: var(--accent-color);
+            box-shadow: var(--shadow-sm);
         }
         .improve-highlight {
             border: 1px solid var(--gray-200);
             border-radius: var(--radius-lg);
             padding: var(--space-5);
-            background: var(--gray-100);
+            background: linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,252,0.95));
             white-space: pre-wrap;
             word-break: break-word;
             line-height: 1.8;
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
         }
         .improve-highlight [data-issue-id] {
             cursor: pointer;
@@ -214,7 +228,7 @@
             padding: var(--space-1) var(--space-3);
             border-radius: var(--radius-full);
             border: 1px solid var(--gray-300);
-            background: var(--gray-100);
+            background: linear-gradient(180deg, var(--gray-100), var(--white));
             font-size: var(--fs-sm);
             font-weight: 600;
             transition: all var(--transition-fast);
@@ -241,7 +255,7 @@
         .improve-issue-card {
             width: 100%;
             text-align: left;
-            background: var(--white);
+            background: linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,252,0.96));
             border: 1px solid var(--gray-200);
             border-left: 4px solid var(--gray-300);
             border-radius: var(--radius-lg);
@@ -276,7 +290,7 @@
             color: var(--text-secondary);
         }
         .improve-detail {
-            background: var(--gray-100);
+            background: linear-gradient(180deg, rgba(248,250,252,0.95), rgba(255,255,255,1));
             border-radius: var(--radius-2xl);
             padding: var(--space-5);
             box-shadow: var(--shadow-md);
@@ -297,7 +311,7 @@
         }
         .improve-suggestion {
             text-align: left;
-            background: var(--white);
+            background: linear-gradient(180deg, rgba(255,255,255,1), rgba(248,250,252,0.98));
             border-radius: var(--radius-md);
             border: 1px solid var(--gray-200);
             padding: var(--space-2) var(--space-3);
@@ -307,6 +321,7 @@
         .improve-suggestion:hover {
             border-color: var(--accent-color);
             color: var(--accent-color);
+            box-shadow: var(--shadow-sm);
         }
         .improve-detail__actions {
             margin-top: var(--space-4);
@@ -341,12 +356,17 @@
             background: #fff7ed;
             color: #9a3412;
             border: 1px solid #fed7aa;
+            box-shadow: var(--shadow-sm);
         }
         .improve-actions {
             margin-top: var(--space-8);
             display: flex;
             gap: var(--space-4);
             flex-wrap: wrap;
+        }
+        .improve-card > .form__help {
+            color: var(--text-secondary);
+            font-size: var(--fs-base);
         }
         .improve-hidden { display: none; }
         @media (max-width: 1000px) {
@@ -364,13 +384,16 @@
             .improve-overview {
                 grid-template-columns: 1fr;
             }
+            .improve-card {
+                padding: var(--space-7);
+            }
             .improve-document-card {
                 padding: var(--space-6);
             }
         }
     </style>
 </head>
-<body>
+<body class="improve-results-page">
     <header class="header">
         <nav class="nav container">
             <div class="nav__brand">
@@ -393,7 +416,7 @@
     <section class="improve-hero">
         <div class="container">
             <h2 class="improve-hero__title">Improve Your Writing Results</h2>
-            <p class="section__description">Review highlights, apply suggestions, and refine your draft.</p>
+            <p class="section__description">Review flagged issues, compare suggestions, and tighten the final version of your draft.</p>
         </div>
     </section>
 
@@ -408,6 +431,7 @@
                 {{ result_html|safe }}
 
                 <form action="/improve/human/form" method="post" style="margin-top: var(--space-6);">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <textarea class="improve-hidden" name="extracted_text">{{ extracted_text|e }}</textarea>
                     <textarea class="improve-hidden" name="ai_results_json">{{ ai_results_json|default('', true)|e }}</textarea>
                     <div class="improve-actions">

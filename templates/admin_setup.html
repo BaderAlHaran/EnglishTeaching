@@ -195,6 +195,7 @@
             {% endwith %}
             
             <form method="POST" class="setup-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="password-requirements">
                     <strong>Password Requirements:</strong>
                     <ul>

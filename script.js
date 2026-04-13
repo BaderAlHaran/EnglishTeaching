@@ -1,3 +1,13 @@
+function getCookieValue(name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function getCsrfToken() {
+  return getCookieValue('csrf_token');
+}
+
 // ===== INTERSECTION OBSERVER FOR SCROLL ANIMATIONS =====
 class ScrollAnimations {
   constructor() {
@@ -360,6 +370,7 @@ class ReviewSystem {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
         },
         body: JSON.stringify({
           name: review.name,
@@ -1072,7 +1083,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       fetch('/track', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': getCsrfToken(),
+        },
         body: payload,
         keepalive: true,
         credentials: 'same-origin'

@@ -864,6 +864,11 @@
     </div>
     </div>
     <script>
+        function getCsrfToken() {
+            const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
         // Navigation functionality
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function(e) {
@@ -886,6 +891,7 @@
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
                     },
                     body: JSON.stringify({
                         submission_id: id,
@@ -914,6 +920,7 @@
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
                     },
                     body: JSON.stringify({
                         submission_id: id,
@@ -945,7 +952,10 @@
                 const res = await fetch('/admin/delete-submission', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
+                    },
                     body: JSON.stringify({ submission_id: id })
                 });
                 const data = await res.json();
@@ -967,7 +977,10 @@
             if (newPwd !== confirmPwd) { alert('Passwords do not match'); return; }
             fetch('/admin/set-password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken(),
+                },
                 body: JSON.stringify({ password: newPwd })
             }).then(r=>r.json()).then(d=>{
                 if (d.success) alert('Password updated successfully');
@@ -981,7 +994,10 @@
                 const res = await fetch('/admin/delete-review', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
+                    },
                     body: JSON.stringify({ review_id: id })
                 });
                 const data = await res.json();
@@ -1000,7 +1016,10 @@
                 const res = await fetch('/admin/approve-review', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
+                    },
                     body: JSON.stringify({ review_id: id })
                 });
                 const data = await res.json();

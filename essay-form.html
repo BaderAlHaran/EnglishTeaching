@@ -313,6 +313,11 @@
 
     <script src="script.js" defer></script>
     <script>
+        function getCsrfTokenFromCookie() {
+            const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
         // Form submission handling
         document.getElementById('essayForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -345,6 +350,9 @@
                 // Submit to simplified backend with file upload
                 const response = await fetch('/submit', {
                     method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': getCsrfTokenFromCookie()
+                    },
                     body: formData
                 });
                 

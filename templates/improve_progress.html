@@ -17,10 +17,16 @@
     <link rel="alternate icon" href="/favicon.ico">
 
     <style>
+        .improve-progress-page {
+            --improve-progress-glow: rgba(39, 174, 96, 0.12);
+        }
         .improve-hero {
             padding: calc(70px + var(--space-24)) 0 var(--space-12);
-            background: linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            background:
+                radial-gradient(circle at top, rgba(39, 174, 96, 0.1), transparent 42%),
+                linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
             text-align: center;
+            border-bottom: 1px solid var(--gray-200);
         }
         .improve-hero__title {
             font-family: var(--font-primary);
@@ -28,6 +34,7 @@
             font-weight: 700;
             color: var(--text-primary);
             margin-bottom: var(--space-2);
+            letter-spacing: -0.02em;
         }
         .improve-section {
             padding: var(--space-20) 0 var(--space-24);
@@ -41,44 +48,85 @@
             border: 1px solid var(--gray-200);
             max-width: 720px;
             margin: 0 auto;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 0.96));
+            position: relative;
+            overflow: hidden;
         }
         .improve-progress {
             height: 12px;
             background: var(--gray-200);
             border-radius: var(--radius-full);
             overflow: hidden;
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
         }
         .improve-progress__bar {
             height: 100%;
             width: 0;
             background: linear-gradient(90deg, var(--accent-color), var(--accent-light));
             transition: width 0.3s ease;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 0 20px var(--improve-progress-glow);
         }
         .improve-status {
             margin-top: var(--space-4);
             color: var(--text-secondary);
+            text-align: center;
+            font-size: var(--fs-base);
         }
         .improve-actions {
             display: flex;
             gap: var(--space-4);
             margin-top: var(--space-6);
             flex-wrap: wrap;
+            justify-content: center;
         }
         .improve-spinner {
-            width: 36px;
-            height: 36px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             border: 3px solid var(--gray-200);
             border-top-color: var(--accent-color);
             animation: spin 1s linear infinite;
             margin: 0 auto var(--space-4);
         }
+        .improve-card__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-2xl);
+            text-align: center;
+            margin-bottom: var(--space-2);
+        }
+        .improve-card__subtitle {
+            color: var(--text-secondary);
+            text-align: center;
+            max-width: 52ch;
+            margin: 0 auto var(--space-6);
+        }
+        .improve-progress-meta {
+            margin-top: var(--space-3);
+            display: flex;
+            justify-content: space-between;
+            gap: var(--space-3);
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+        }
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        @media (max-width: 768px) {
+            .improve-card {
+                padding: var(--space-7);
+            }
+            .improve-actions {
+                gap: var(--space-3);
+            }
+            .improve-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
-<body>
+<body class="improve-progress-page">
     <header class="header">
         <nav class="nav container">
             <div class="nav__brand">
@@ -101,7 +149,7 @@
     <section class="improve-hero">
         <div class="container">
             <h2 class="improve-hero__title">Processing Your Request</h2>
-            <p class="section__description">We are analyzing your text. This usually finishes quickly.</p>
+            <p class="section__description">We are analyzing your text and preparing the highlighted results view.</p>
         </div>
     </section>
 
@@ -109,8 +157,14 @@
         <div class="container">
             <div class="improve-card">
                 <div class="improve-spinner"></div>
+                <h3 class="improve-card__title">Working on your draft</h3>
+                <p class="improve-card__subtitle">This usually completes quickly. Keep this page open and you will be redirected automatically when the review is ready.</p>
                 <div class="improve-progress" aria-label="Progress">
                     <div class="improve-progress__bar" id="progressBar"></div>
+                </div>
+                <div class="improve-progress-meta">
+                    <span>Live progress</span>
+                    <span id="progressPercent">0%</span>
                 </div>
                 <div class="improve-status" id="statusText">Queued...</div>
                 <div class="improve-actions">
@@ -159,6 +213,7 @@
         const jobId = "{{ job_id }}";
         const statusText = document.getElementById('statusText');
         const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
 
         async function pollStatus() {
             try {
@@ -166,6 +221,7 @@
                 const data = await res.json();
                 if (data.progress !== undefined) {
                     progressBar.style.width = `${data.progress}%`;
+                    progressPercent.textContent = `${data.progress}%`;
                 }
                 if (data.message) {
                     statusText.textContent = data.message;

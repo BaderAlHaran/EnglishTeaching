@@ -109,6 +109,7 @@
                 <div class="human-alert">{{ error }}</div>
                 {% endif %}
                 <form action="/improve/human/submit" method="post" id="improveHumanForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="form__group" style="display:none;" aria-hidden="true">
                         <label for="website">Website</label>
                         <input type="text" id="website" name="website" autocomplete="off" tabindex="-1">
