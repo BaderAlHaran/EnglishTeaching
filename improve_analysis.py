@@ -1013,7 +1013,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     word_count = stats.get('word_count') or 0
     if word_count:
         density = issue_total / word_count * 100
-        score = max(35, min(100, int(round(100 - density * 2))))
+        score = max(35, min(100, int(round(100 - density * 3))))
     else:
         score = max(35, min(100, 100 - (issue_total * 2)))
 
