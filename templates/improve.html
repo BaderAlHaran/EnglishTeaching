@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Improve Your Writing | English Essay Writing</title>
-    <meta name="description" content="Check grammar, spelling, and clarity in your draft with fast feedback from the English Essay Writing checker.">
+    <title>Free Essay Checker — Grammar, Spelling & Style | EnglishEssayWriting.net</title>
+    <meta name="description" content="Check your essay for grammar, spelling, and style mistakes in seconds. Free online essay checker — paste text or upload a PDF/DOCX, no sign-up needed. Optional human review by an English teacher.">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,15 +21,81 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="alternate icon" href="/favicon.ico">
     <link rel="canonical" href="https://englishessaywriting.net/improve">
-    <meta property="og:title" content="Improve Your Writing | English Essay Writing">
-    <meta property="og:description" content="Check grammar, spelling, and clarity in your draft with fast feedback from the English Essay Writing checker.">
+    <meta property="og:title" content="Free Essay Checker — Grammar, Spelling & Style">
+    <meta property="og:description" content="Check your essay for grammar, spelling, and style mistakes in seconds. Free, no sign-up — paste text or upload a PDF/DOCX.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://englishessaywriting.net/improve">
     <meta property="og:image" content="https://englishessaywriting.net/logo.svg">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Improve Your Writing | English Essay Writing">
-    <meta name="twitter:description" content="Check grammar, spelling, and clarity in your draft with fast feedback from the English Essay Writing checker.">
+    <meta name="twitter:title" content="Free Essay Checker — Grammar, Spelling & Style">
+    <meta name="twitter:description" content="Check your essay for grammar, spelling, and style mistakes in seconds. Free, no sign-up — paste text or upload a PDF/DOCX.">
     <meta name="robots" content="index, follow, max-image-preview:large">
+
+    <!-- WebApplication Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Free Essay Checker",
+      "url": "https://englishessaywriting.net/improve",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Free online essay checker that finds grammar, spelling, and style issues in pasted text or uploaded PDF/DOCX files, with optional human review.",
+      "publisher": {
+        "@type": "Organization",
+        "name": "EnglishEssayWriting.net",
+        "url": "https://englishessaywriting.net/"
+      }
+    }
+    </script>
+
+    <!-- FAQPage Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is the essay checker really free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. You can check grammar, spelling, and style for free with no sign-up and no word limit below 40,000 characters. Human review by an English teacher is an optional follow-up."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What does the essay checker look for?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It flags grammar mistakes, spelling errors, word confusion (their/there, its/it's), wordy phrases, long sentences, and style issues, and suggests corrections you can apply with one click."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What file types can I upload?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You can paste text directly or upload a PDF or DOCX file up to 10MB. The text is extracted and checked the same way."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my essay stored or shared?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Your text is processed to generate suggestions and is not published anywhere. Grammar analysis uses the LanguageTool service; see our privacy policy for details."
+          }
+        }
+      ]
+    }
+    </script>
 
     <style>
         .improve-page {
@@ -374,9 +440,9 @@
 
     <section class="improve-hero">
         <div class="container">
-            <h2 class="improve-hero__title">Improve Your Writing</h2>
-            <p class="improve-hero__description">Get a fast clarity pass on grammar, spelling, and style before you submit your work.</p>
-            <p class="improve-hero__note">Paste text or upload a document. Uploaded files take priority over pasted text.</p>
+            <h2 class="improve-hero__title">Free Essay Checker</h2>
+            <p class="improve-hero__description">Check your essay for grammar, spelling, and style mistakes in seconds — free, no sign-up required.</p>
+            <p class="improve-hero__note">Paste text or upload a PDF/DOCX. Uploaded files take priority over pasted text.</p>
         </div>
     </section>
 
@@ -473,6 +539,22 @@
                         <h4 class="improve-side__title">Good to know</h4>
                         <p class="improve-tip">Maximum length: {{ max_chars|default(40000, true) }} characters.</p>
                         <p class="improve-tip">For best results, check the exact section you plan to submit. You can request human correction afterward if needed.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="improve-grid" style="margin-top: var(--space-12); grid-template-columns: 1fr;">
+                <div class="improve-card">
+                    <h3 class="improve-card__title">Frequently asked questions</h3>
+                    <div class="improve-faq">
+                        <h4 class="improve-side__title" style="margin-top: var(--space-6);">Is the essay checker really free?</h4>
+                        <p class="improve-tip">Yes. You can check grammar, spelling, and style for free with no sign-up, up to 40,000 characters per check. Human review by an English teacher is an optional follow-up.</p>
+                        <h4 class="improve-side__title" style="margin-top: var(--space-6);">What does the essay checker look for?</h4>
+                        <p class="improve-tip">It flags grammar mistakes, spelling errors, word confusion (their/there, its/it's), wordy phrases, long sentences, and style issues, and suggests corrections you can apply with one click.</p>
+                        <h4 class="improve-side__title" style="margin-top: var(--space-6);">What file types can I upload?</h4>
+                        <p class="improve-tip">You can paste text directly or upload a PDF or DOCX file up to 10MB. The text is extracted and checked the same way.</p>
+                        <h4 class="improve-side__title" style="margin-top: var(--space-6);">Is my essay stored or shared?</h4>
+                        <p class="improve-tip">Your text is processed to generate suggestions and is not published anywhere. Grammar analysis uses the LanguageTool service — see our <a href="/privacy">privacy policy</a> for details.</p>
                     </div>
                 </div>
             </div>

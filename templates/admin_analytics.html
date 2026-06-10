@@ -118,6 +118,18 @@
                 <div class="stat-label">Yesterday Unique Visitors</div>
                 <div class="stat-value">{{ yesterday_count }}</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-label">Checker Runs Today</div>
+                <div class="stat-value">{{ checker_today }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Checker Runs (All Time)</div>
+                <div class="stat-value">{{ checker_total }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Human Review Requests (All Time)</div>
+                <div class="stat-value">{{ review_total }}</div>
+            </div>
         </div>
 
         <div class="section">
@@ -128,6 +140,8 @@
                     <tr>
                         <th>Date</th>
                         <th>Unique Visitors</th>
+                        <th>Checker Runs</th>
+                        <th>Review Requests</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -135,6 +149,8 @@
                     <tr>
                         <td>{{ row.date }}</td>
                         <td>{{ row.count }}</td>
+                        <td>{{ row.checker_runs }}</td>
+                        <td>{{ row.reviews }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

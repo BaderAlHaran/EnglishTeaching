@@ -203,13 +203,57 @@ def admin_analytics():
         LIMIT 10
     ''', (today.isoformat(),))
     country_rows = cursor.fetchall()
+
+    # Checker usage and human-review submissions; these tables are created
+    # lazily, so they may not exist yet on a fresh database.
+    date_expr = 'CAST(created_at AS DATE)' if app_services.is_postgres() else 'date(created_at)'
+    checker_by_date = {}
+    checker_total = 0
+    try:
+        cursor.execute(f'''
+            SELECT {date_expr}, COUNT(*)
+            FROM improve_jobs
+            WHERE {date_expr} >= ?
+            GROUP BY {date_expr}
+        ''', (start_date.isoformat(),))
+        for row in cursor.fetchall():
+            date_value = row[0]
+            date_key = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
+            checker_by_date[date_key] = row[1]
+        cursor.execute('SELECT COUNT(*) FROM improve_jobs')
+        checker_total = cursor.fetchone()[0]
+    except Exception:
+        pass
+
+    review_by_date = {}
+    review_total = 0
+    try:
+        cursor.execute(f'''
+            SELECT {date_expr}, COUNT(*)
+            FROM submissions
+            WHERE {date_expr} >= ?
+            GROUP BY {date_expr}
+        ''', (start_date.isoformat(),))
+        for row in cursor.fetchall():
+            date_value = row[0]
+            date_key = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
+            review_by_date[date_key] = row[1]
+        cursor.execute('SELECT COUNT(*) FROM submissions')
+        review_total = cursor.fetchone()[0]
+    except Exception:
+        pass
     conn.close()
 
     last_7_days = []
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
         day_key = day.isoformat()
-        last_7_days.append({'date': day_key, 'count': counts_by_date.get(day_key, 0)})
+        last_7_days.append({
+            'date': day_key,
+            'count': counts_by_date.get(day_key, 0),
+            'checker_runs': checker_by_date.get(day_key, 0),
+            'reviews': review_by_date.get(day_key, 0)
+        })
 
     top_pages = [{'path': row[0], 'count': row[1]} for row in top_rows]
     top_countries = [{'country': row[0], 'count': row[1]} for row in country_rows]
@@ -221,6 +265,9 @@ def admin_analytics():
         last_7_days=last_7_days,
         top_pages=top_pages,
         top_countries=top_countries,
+        checker_today=checker_by_date.get(today.isoformat(), 0),
+        checker_total=checker_total,
+        review_total=review_total,
     )
 
 

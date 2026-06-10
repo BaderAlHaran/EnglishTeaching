@@ -604,7 +604,7 @@ def sitemap_xml():
     """Simple dynamic sitemap covering key pages"""
     base = request.url_root.rstrip('/')
     urls = [
-        "/", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/faq"
+        "/", "/improve", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/faq"
     ]
     items = "\n".join(
         f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
