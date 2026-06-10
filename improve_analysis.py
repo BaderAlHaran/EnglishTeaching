@@ -8,6 +8,11 @@ import time
 from markupsafe import Markup, escape
 
 AI_CHECKER_ENABLED = os.environ.get('AI_CHECKER_ENABLED', 'true').lower() in {'1', 'true', 'yes', 'on'}
+LANGUAGETOOL_ENABLED = os.environ.get('LANGUAGETOOL_ENABLED', 'true').lower() in {'1', 'true', 'yes', 'on'}
+LANGUAGETOOL_API_URL = os.environ.get('LANGUAGETOOL_API_URL', 'https://api.languagetool.org/v2/check')
+LANGUAGETOOL_TIMEOUT_SECONDS = float(os.environ.get('LANGUAGETOOL_TIMEOUT_SECONDS', '8'))
+# Public api.languagetool.org rejects requests over 20KB of text.
+LANGUAGETOOL_MAX_CHARS = int(os.environ.get('LANGUAGETOOL_MAX_CHARS', '20000'))
 SPELLING_ALLOWLIST = {
     'Bader', 'Kuwait', 'GCC', 'MENA', 'SaaS', 'STEM', 'API', 'APIs', 'COVID', 'COVID-19',
     'Python', 'Flask', 'Postgres', 'PostgreSQL', 'SQL', 'NoSQL', 'GitHub', 'Render',
@@ -21,6 +26,40 @@ _IMPROVE_SYMSPELL = None
 
 def _count_word_tokens(text):
     return len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
+
+
+def _run_languagetool(text, logger):
+    """Query the LanguageTool API. Returns a list of matches, or None on any
+    failure so callers can fall back to the local rules."""
+    if not LANGUAGETOOL_ENABLED or not text.strip() or len(text) > LANGUAGETOOL_MAX_CHARS:
+        return None
+    try:
+        import requests
+    except Exception:
+        return None
+    try:
+        response = requests.post(
+            LANGUAGETOOL_API_URL,
+            data={'text': text, 'language': 'en-US'},
+            timeout=LANGUAGETOOL_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+        matches = response.json().get('matches')
+        return matches if isinstance(matches, list) else []
+    except Exception as exc:
+        logger.info("LanguageTool unavailable, using local rules: %s", exc)
+        return None
+
+
+def _languagetool_kind(match):
+    rule = match.get('rule') or {}
+    issue_type = (rule.get('issueType') or '').lower()
+    category = ((rule.get('category') or {}).get('id') or '').upper()
+    if issue_type == 'misspelling' or category == 'TYPOS':
+        return 'spelling'
+    if issue_type in {'style', 'register', 'locale-violation', 'non-conformance'} or category in {'STYLE', 'REDUNDANCY', 'PLAIN_ENGLISH', 'WIKIPEDIA', 'TYPOGRAPHY'}:
+        return 'style'
+    return 'grammar'
 
 
 def _build_ignored_spans(text):
@@ -450,6 +489,31 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     )
 
     if progress_cb:
+        progress_cb(14, "Running advanced grammar check...")
+
+    lt_matches = _run_languagetool(text, logger)
+    lt_active = lt_matches is not None
+    if lt_active:
+        for match in lt_matches:
+            offset = match.get('offset')
+            length = match.get('length')
+            if offset is None or not length:
+                continue
+            end = offset + length
+            if _overlaps_ignored(offset, end):
+                continue
+            message = (match.get('shortMessage') or match.get('message') or '').strip()
+            replacements = [r.get('value') for r in (match.get('replacements') or [])[:3] if r.get('value')]
+            _add_issue(
+                offset,
+                end,
+                _languagetool_kind(match),
+                message or 'Possible issue.',
+                replacements,
+                sentence_id=_sentence_id_for_span(offset, end, sentences)
+            )
+
+    if progress_cb:
         progress_cb(18, "Checking grammar...")
 
     comparatives = {'more', 'less', 'rather', 'better', 'worse', 'higher', 'lower', 'greater', 'fewer'}
@@ -457,10 +521,12 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     obj_pronouns = {'me', 'him', 'her', 'us', 'them'}
     subj_pronouns = {'i', 'he', 'she', 'we', 'they'}
     determiners = {'a', 'an', 'the', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'our', 'their', 'its'}
+    # 'work', 'research', and 'analysis' are usually uncountable in academic
+    # prose, so they don't belong in this countable-noun list.
     count_nouns = {
         'idea', 'problem', 'issue', 'result', 'study', 'case', 'factor', 'reason', 'example',
         'argument', 'method', 'solution', 'benefit', 'risk', 'model', 'approach', 'paper', 'essay',
-        'work', 'research', 'analysis', 'assignment', 'project', 'thesis', 'conclusion', 'summary'
+        'assignment', 'project', 'thesis', 'conclusion', 'summary'
     }
 
     def _token_number(token):
@@ -589,6 +655,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     long_sentence_limit = 40
     max_filler_hits = 1
     max_wordy_hits = 2
+    passive_sentences = []
 
     for sentence in sentences:
         if _time_guard():
@@ -653,6 +720,9 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
             _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'grammar', 'Missing apostrophe in contraction.', [suggestion] if suggestion else [], sentence_id=sent_id)
 
         for match in re.finditer(r"\b([A-Za-z]+)\s+\1\b", sent_text, flags=re.IGNORECASE):
+            # "had had" and "that that" are valid English doubles.
+            if match.group(1).lower() in {'had', 'that'}:
+                continue
             _add_issue(sentence['start'] + match.start(), sentence['start'] + match.end(), 'style', 'Repeated word.', [], sentence_id=sent_id)
 
         for match in re.finditer(r"\b(alot|eachother|everytime)\b", sent_text, flags=re.IGNORECASE):
@@ -726,7 +796,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
         if re.search(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
             for match in re.finditer(r"\b(he|she|it)\s+([a-z]+)\b", sent_text, flags=re.IGNORECASE):
                 verb = match.group(2)
-                auxiliaries = {'is', 'was', 'has', 'does', 'did', 'will', 'would', 'can', 'could', 'should', 'might', 'may', 'must'}
+                auxiliaries = {'is', 'was', 'has', 'had', 'does', 'did', 'will', 'would', 'can', 'could', 'should', 'might', 'may', 'must'}
                 if verb in auxiliaries or verb.endswith(('ed', 'ing')):
                     continue
                 if not verb.endswith('s'):
@@ -757,10 +827,16 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
         if doc_sentence is not None:
             passive = any(tok.dep_ in {'nsubjpass', 'auxpass'} for tok in doc_sentence)
             if passive:
-                _add_issue(sentence['start'], sentence['end'], 'style', 'Passive voice; consider using active voice.', [], sentence_id=sent_id)
+                passive_sentences.append(sentence)
             adverb_count = sum(1 for tok in doc_sentence if tok.tag_ == 'RB' and tok.text.lower().endswith('ly'))
             if adverb_count >= 4:
                 _add_issue(sentence['start'], sentence['end'], 'style', 'Heavy adverb use; consider tightening.', [], sentence_id=sent_id)
+
+    # Passive voice is legitimate in academic writing; only flag it when it
+    # dominates the text (over 30% of sentences, with at least 2 hits).
+    if sentences and len(passive_sentences) >= 2 and len(passive_sentences) / len(sentences) > 0.3:
+        for sentence in passive_sentences:
+            _add_issue(sentence['start'], sentence['end'], 'style', 'Passive voice; consider using active voice.', [], sentence_id=sentence['id'])
 
     if progress_cb:
         progress_cb(48, "Checking mechanics...")
@@ -783,10 +859,17 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     if progress_cb:
         progress_cb(60, "Checking spelling...")
 
-    if SpellChecker or sym_spell:
+    if (SpellChecker or sym_spell) and not lt_active:
         spell = SpellChecker() if SpellChecker else None
         if spell:
             spell.word_frequency.load_words(list(allowlist_lower))
+        # Sentence-initial words are capitalized but still need spellchecking;
+        # only mid-sentence capitalized words are presumed proper nouns.
+        sentence_initial_starts = set()
+        for sentence in sentences:
+            first_word = re.search(r"[^\W\d_]", text[sentence['start']:sentence['end']])
+            if first_word:
+                sentence_initial_starts.add(sentence['start'] + first_word.start())
         tokens_for_spell = []
         if doc is not None:
             tokens_for_spell = list(doc)
@@ -805,7 +888,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
                     continue
                 if token.like_url or token.like_email:
                     continue
-                if token.pos_ == 'PROPN':
+                if token.pos_ == 'PROPN' and start not in sentence_initial_starts:
                     continue
             else:
                 word = token.group(0)
@@ -823,7 +906,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
                 continue
             if '-' in word:
                 continue
-            if word[0].isupper():
+            if word[0].isupper() and start not in sentence_initial_starts:
                 continue
             lower = word.lower()
             if lower in allowlist_lower:
@@ -925,7 +1008,14 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     stats = _build_stats(sentences, token_count, text)
     rewrite_count = sum(1 for i in issues if i.get('is_rewrite'))
     issue_total = summary['spelling'] + summary['grammar'] + summary['style'] + rewrite_count
-    score = max(35, min(100, 100 - (issue_total * 2)))
+    # Score by issue density (issues per 100 words) so long, clean essays
+    # aren't penalized the same as short, error-dense ones.
+    word_count = stats.get('word_count') or 0
+    if word_count:
+        density = issue_total / word_count * 100
+        score = max(35, min(100, int(round(100 - density * 2))))
+    else:
+        score = max(35, min(100, 100 - (issue_total * 2)))
 
     warning = '; '.join(warnings) if warnings else None
     return {

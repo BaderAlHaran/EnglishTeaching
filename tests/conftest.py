@@ -6,6 +6,14 @@ import types
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def disable_languagetool(monkeypatch):
+    # Keep tests offline and deterministic: exercise the local rules,
+    # not the external LanguageTool API.
+    import improve_analysis
+    monkeypatch.setattr(improve_analysis, "LANGUAGETOOL_ENABLED", False)
+
+
 @pytest.fixture()
 def app_module(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "test-admin-password")
