@@ -13,6 +13,8 @@ LANGUAGETOOL_API_URL = os.environ.get('LANGUAGETOOL_API_URL', 'https://api.langu
 LANGUAGETOOL_TIMEOUT_SECONDS = float(os.environ.get('LANGUAGETOOL_TIMEOUT_SECONDS', '8'))
 # Public api.languagetool.org rejects requests over 20KB of text.
 LANGUAGETOOL_MAX_CHARS = int(os.environ.get('LANGUAGETOOL_MAX_CHARS', '20000'))
+# 'picky' enables stricter grammar/style rules; set LANGUAGETOOL_LEVEL=default to relax.
+LANGUAGETOOL_LEVEL = os.environ.get('LANGUAGETOOL_LEVEL', 'picky')
 SPELLING_ALLOWLIST = {
     'Bader', 'Kuwait', 'GCC', 'MENA', 'SaaS', 'STEM', 'API', 'APIs', 'COVID', 'COVID-19',
     'Python', 'Flask', 'Postgres', 'PostgreSQL', 'SQL', 'NoSQL', 'GitHub', 'Render',
@@ -40,7 +42,7 @@ def _run_languagetool(text, logger):
     try:
         response = requests.post(
             LANGUAGETOOL_API_URL,
-            data={'text': text, 'language': 'en-US'},
+            data={'text': text, 'language': 'en-US', 'level': LANGUAGETOOL_LEVEL},
             timeout=LANGUAGETOOL_TIMEOUT_SECONDS
         )
         response.raise_for_status()
