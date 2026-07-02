@@ -407,11 +407,17 @@ class ReviewSystem {
     const reviewsGrid = document.getElementById('reviewsGrid');
     if (!reviewsGrid) return;
 
+    // Hide the "Recent Reviews" block entirely until there are real reviews;
+    // an empty review area reads as "nobody uses this site".
+    const displayBlock = reviewsGrid.closest('.reviews__display');
+
     if (!list || list.length === 0) {
-      reviewsGrid.innerHTML = '<p class="no-reviews">No reviews yet. Be the first to share your experience!</p>';
+      if (displayBlock) displayBlock.style.display = 'none';
+      reviewsGrid.innerHTML = '';
       return;
     }
 
+    if (displayBlock) displayBlock.style.display = '';
     reviewsGrid.innerHTML = list.map(review => this.createReviewCard(review)).join('');
   }
 
