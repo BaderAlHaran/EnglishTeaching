@@ -668,10 +668,24 @@ def track_visit():
         resp.set_cookie('visitor_id', new_visitor_id, max_age=31536000, samesite='Lax', httponly=True, secure=not app.debug)
     return resp
 
+# Page .html filenames redirect to their canonical clean URLs so Google
+# doesn't see duplicate content at two addresses (e.g. /about.html vs /about).
+CANONICAL_PAGE_REDIRECTS = {
+    'about.html': '/about',
+    'contact.html': '/contact',
+    'faq.html': '/faq',
+    'terms.html': '/terms',
+    'privacy.html': '/privacy',
+    'essay-form.html': '/essay-form',
+    'free-essay-writing-help.html': '/free-essay-writing-help',
+}
+
 # Static file routes - Must be AFTER specific routes
 @app.route('/<path:filename>')
 def static_files(filename):
     """Serve static files (CSS, JS, images, etc.)"""
+    if filename in CANONICAL_PAGE_REDIRECTS:
+        return redirect(CANONICAL_PAGE_REDIRECTS[filename], code=301)
     if not filename.startswith('api/') and not filename.startswith('templates/'):
         try:
             # Check if it's a static file
@@ -772,8 +786,8 @@ def send_contact():
 
 @app.route('/index.html')
 def index_html():
-    """Serve home page for direct /index.html requests"""
-    return send_from_directory('.', 'index.html')
+    """Redirect /index.html to the canonical homepage URL"""
+    return redirect('/', code=301)
 
 @app.route('/favicon.ico')
 def favicon():
