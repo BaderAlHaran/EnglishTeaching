@@ -30,27 +30,62 @@ def _count_word_tokens(text):
     return len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
 
 
+def _languagetool_chunks(text, limit):
+    """Split text into chunks under the API size limit, cutting at paragraph
+    or sentence boundaries so matches stay accurate. Returns (offset, chunk)."""
+    chunks = []
+    start = 0
+    length = len(text)
+    while start < length:
+        end = min(start + limit, length)
+        if end < length:
+            cut = text.rfind('\n', start, end)
+            if cut <= start:
+                cut = text.rfind('. ', start, end)
+                cut = cut + 2 if cut > start else -1
+            else:
+                cut += 1
+            if cut > start:
+                end = cut
+        chunks.append((start, text[start:end]))
+        start = end
+    return chunks
+
+
 def _run_languagetool(text, logger, language='en-US'):
-    """Query the LanguageTool API. Returns a list of matches, or None on any
-    failure so callers can fall back to the local rules."""
-    if not LANGUAGETOOL_ENABLED or not text.strip() or len(text) > LANGUAGETOOL_MAX_CHARS:
+    """Query the LanguageTool API, splitting long texts into multiple requests.
+    Returns a list of matches (offsets relative to the full text), or None on
+    total failure so callers can fall back to the local rules."""
+    if not LANGUAGETOOL_ENABLED or not text.strip():
         return None
     try:
         import requests
     except Exception:
         return None
-    try:
-        response = requests.post(
-            LANGUAGETOOL_API_URL,
-            data={'text': text, 'language': language, 'level': LANGUAGETOOL_LEVEL},
-            timeout=LANGUAGETOOL_TIMEOUT_SECONDS
-        )
-        response.raise_for_status()
-        matches = response.json().get('matches')
-        return matches if isinstance(matches, list) else []
-    except Exception as exc:
-        logger.info("LanguageTool unavailable, using local rules: %s", exc)
-        return None
+
+    all_matches = []
+    any_success = False
+    for chunk_start, chunk in _languagetool_chunks(text, LANGUAGETOOL_MAX_CHARS):
+        if not chunk.strip():
+            continue
+        try:
+            response = requests.post(
+                LANGUAGETOOL_API_URL,
+                data={'text': chunk, 'language': language, 'level': LANGUAGETOOL_LEVEL},
+                timeout=LANGUAGETOOL_TIMEOUT_SECONDS
+            )
+            response.raise_for_status()
+            matches = response.json().get('matches')
+            if isinstance(matches, list):
+                any_success = True
+                for match in matches:
+                    if isinstance(match.get('offset'), int):
+                        match['offset'] += chunk_start
+                    all_matches.append(match)
+        except Exception as exc:
+            logger.info("LanguageTool chunk failed (offset %s): %s", chunk_start, exc)
+
+    return all_matches if any_success else None
 
 
 def _languagetool_kind(match):
