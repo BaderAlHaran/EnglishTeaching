@@ -29,6 +29,43 @@ def _improve_context():
     }
 
 
+def _filter_non_prose(text):
+    """Drop lines from extracted PDF text that are not prose: figure/table
+    captions, table rows (number/symbol heavy), page numbers, and stray
+    fragments. Keeps the essay content for analysis."""
+    if not text:
+        return text
+    kept = []
+    for line in text.replace('\r\n', '\n').split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            kept.append('')
+            continue
+        # Figure/table/chart captions, e.g. "Figure 3: results", "Table 2."
+        if re.match(r'^(figure|fig\.?|table|chart|diagram|exhibit|appendix)\s*\d', stripped, flags=re.IGNORECASE):
+            continue
+        # Bare page numbers / numeric rows
+        if re.fullmatch(r'[\d\s.,%$()\-–—/:+*=|]+', stripped):
+            continue
+        # Delimited table rows ("Hours | Grade | Count", tab-separated cells)
+        if stripped.count('|') >= 2 or '\t' in stripped:
+            continue
+        # Table rows and equations: mostly digits/symbols rather than letters
+        non_space = re.sub(r'\s', '', stripped)
+        alpha = sum(1 for ch in non_space if ch.isalpha())
+        if non_space and alpha / len(non_space) < 0.5:
+            continue
+        # Stray one/two-word fragments without sentence punctuation
+        # (running headers, axis labels, column headings)
+        words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", stripped)
+        if len(words) <= 2 and not stripped.endswith(('.', '!', '?', ',', ';', ':')) and not stripped.endswith('-'):
+            continue
+        kept.append(line)
+    filtered = '\n'.join(kept)
+    filtered = re.sub(r'\n{3,}', '\n\n', filtered)
+    return filtered.strip()
+
+
 def _normalize_text(text):
     """Clean up PDF-style hard wrapping so analysis sees real sentences:
     rejoin hyphenated line-wraps (con-\\ntrolled -> controlled) and merge
@@ -134,6 +171,11 @@ def _extract_text_from_upload(file_storage):
         text = "\n".join(parts).strip()
         if not text:
             return None, "No text could be extracted from the PDF.", None
+        filtered = _filter_non_prose(text)
+        # If filtering removed everything (e.g. a table-only document),
+        # fall back to the raw extraction rather than returning nothing.
+        if filtered:
+            text = filtered
         return text, None, warning
 
     try:
