@@ -207,12 +207,18 @@
             border-bottom-color: var(--accent-color);
         }
         .improve-sidebar {
-            display: grid;
+            display: flex;
+            flex-direction: column;
             gap: var(--space-6);
             position: sticky;
             top: 90px;
+            max-height: calc(100vh - 110px);
         }
         .improve-sidebar__section {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
             background: var(--white);
             border-radius: var(--radius-2xl);
             padding: var(--space-5);
@@ -249,7 +255,9 @@
         .improve-issues-list {
             display: grid;
             gap: var(--space-3);
-            max-height: 55vh;
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: 45vh;
             overflow-y: auto;
             padding-right: var(--space-2);
         }
@@ -296,6 +304,9 @@
             padding: var(--space-5);
             box-shadow: var(--shadow-md);
             border: 1px solid var(--gray-200);
+            flex-shrink: 0;
+            max-height: 38vh;
+            overflow-y: auto;
         }
         .improve-detail__title {
             font-size: var(--fs-lg);
@@ -376,8 +387,12 @@
             }
             .improve-sidebar {
                 position: static;
+                max-height: none;
             }
             .improve-issues-list {
+                max-height: 50vh;
+            }
+            .improve-detail {
                 max-height: none;
             }
         }

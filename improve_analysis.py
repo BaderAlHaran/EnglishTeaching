@@ -539,12 +539,19 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
             end = offset + length
             if _overlaps_ignored(offset, end):
                 continue
+            kind = _languagetool_kind(match)
+            flagged_text = text[offset:end]
+            # PDF extraction often glues words together (byADworldwide,
+            # into8different). Mixed-case jumps and embedded digits are
+            # extraction artifacts, not student misspellings — skip them.
+            if kind == 'spelling' and (re.search(r'[a-z][A-Z]', flagged_text) or re.search(r'\d', flagged_text)):
+                continue
             message = (match.get('shortMessage') or match.get('message') or '').strip()
             replacements = [r.get('value') for r in (match.get('replacements') or [])[:3] if r.get('value')]
             _add_issue(
                 offset,
                 end,
-                _languagetool_kind(match),
+                kind,
                 message or 'Possible issue.',
                 replacements,
                 sentence_id=_sentence_id_for_span(offset, end, sentences)
