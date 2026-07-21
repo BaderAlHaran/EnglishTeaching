@@ -557,7 +557,23 @@ class ImproveInputStats {
     this.maxChars = parseInt(this.textarea.getAttribute('data-max-chars'), 10) || null;
     this.update = this.update.bind(this);
     this.textarea.addEventListener('input', this.update);
+    this.prefillFromRecheck();
     this.update();
+  }
+
+  prefillFromRecheck() {
+    // "Edit & re-check" on the results page stashes the corrected text here.
+    try {
+      const stored = sessionStorage.getItem('improveRecheckText');
+      if (stored && !this.textarea.value) {
+        this.textarea.value = stored;
+      }
+      if (stored !== null) {
+        sessionStorage.removeItem('improveRecheckText');
+      }
+    } catch (e) {
+      // Storage unavailable; nothing to prefill.
+    }
   }
 
   countWords(text) {
@@ -692,6 +708,18 @@ class ImproveWorkspace {
 
     if (this.copyBtn) {
       this.copyBtn.addEventListener('click', () => this.copyText());
+    }
+
+    const recheckBtn = this.root.querySelector('[data-improve-recheck]');
+    if (recheckBtn) {
+      recheckBtn.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem('improveRecheckText', this.text || '');
+        } catch (e) {
+          // Storage unavailable (private mode); fall through to plain navigation.
+        }
+        window.location.href = '/improve';
+      });
     }
   }
 

@@ -433,6 +433,7 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append('<p class="improve-document__meta">Click a highlight to review and apply suggestions.</p>')
     parts.append('</div>')
     parts.append('<button class="improve-copy" type="button" data-improve-copy>Copy revised text</button>')
+    parts.append('<button class="improve-copy" type="button" data-improve-recheck>Edit &amp; re-check</button>')
     parts.append('</div>')
     parts.append(f'<div class="improve-highlight" data-improve-document>{highlighted_text}</div>')
     parts.append('</div>')
