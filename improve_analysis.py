@@ -1027,7 +1027,8 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
         'stats': stats,
         'score': score,
         'issue_total': issue_total,
-        'rewrite_count': rewrite_count
+        'rewrite_count': rewrite_count,
+        'passive_sentence_ids': [s['id'] for s in passive_sentences]
     }, None, warning
 
 def build_highlighted_html(text, issues):

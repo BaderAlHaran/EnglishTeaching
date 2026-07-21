@@ -14,6 +14,7 @@ from markupsafe import Markup, escape
 
 import app_services
 import improve_analysis
+import mechanics_report
 
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
 IMPROVE_MAX_BYTES = 10 * 1024 * 1024
@@ -283,6 +284,76 @@ def _update_improve_job(job_id, status=None, progress=None, message=None, result
     finally:
         conn.close()
 
+def _build_mechanics_html(mechanics):
+    if not mechanics:
+        return ''
+
+    def _badge(value):
+        return f'<span style="display:inline-block;min-width:2em;text-align:center;padding:2px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-weight:600;font-size:13px;">{escape(str(value))}</span>'
+
+    def _card(title, badge_value, summary, detail_items):
+        items_html = ''
+        if detail_items:
+            items = ''.join(f'<li style="margin:4px 0;">{escape(item)}</li>' for item in detail_items)
+            items_html = f'<ul style="margin:10px 0 0;padding-left:20px;color:#475569;font-size:14px;">{items}</ul>'
+        return (
+            '<details class="improve-card" style="margin-bottom:12px;padding:14px 18px;">'
+            f'<summary style="cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;">'
+            f'{_badge(badge_value)} {escape(title)}</summary>'
+            f'<p style="margin:10px 0 0;color:#334155;font-size:14px;">{escape(summary)}</p>'
+            f'{items_html}'
+            '</details>'
+        )
+
+    clarity = mechanics.get('sentenceClarity') or {}
+    variety = mechanics.get('repetitionVariety') or {}
+    structure = mechanics.get('structuralSignals') or {}
+    readability = mechanics.get('readability') or {}
+
+    parts = ['<div class="improve-mechanics" style="margin-top:24px;">']
+    parts.append('<h4 class="improve-document__title" style="margin-bottom:12px;">Writing Mechanics Report</h4>')
+
+    parts.append(_card(
+        'Sentence Clarity',
+        clarity.get('longSentenceCount', 0),
+        clarity.get('summary', ''),
+        [f'Example: {e}' for e in (clarity.get('examples') or [])]
+    ))
+
+    variety_details = [f"\"{item['word']}\" used {item['count']} times" for item in (variety.get('repeatedWords') or [])]
+    variety_details += [f"Filler \"{item['phrase']}\" used {item['count']} times" for item in (variety.get('overusedFillers') or [])]
+    parts.append(_card(
+        'Repetition & Word Variety',
+        len(variety.get('repeatedWords') or []) + len(variety.get('overusedFillers') or []),
+        variety.get('summary', ''),
+        variety_details
+    ))
+
+    transition = structure.get('transitionOpenerPercent')
+    parts.append(_card(
+        'Structural Signals',
+        f"{transition}%" if transition is not None else '—',
+        structure.get('summary', ''),
+        structure.get('repetitiveStarters') or []
+    ))
+
+    parts.append(_card(
+        'Readability',
+        readability.get('gradeLevel', '—'),
+        readability.get('label', ''),
+        []
+    ))
+
+    parts.append(
+        '<p class="form__help" style="margin-top:10px;">'
+        'This report uses rule-based writing analysis (no AI-generated content or feedback). '
+        'It checks mechanics like sentence length, repetition, and structure — not argument quality or content accuracy.'
+        '</p>'
+    )
+    parts.append('</div>')
+    return ''.join(parts)
+
+
 def _build_result_html(ai_result, highlighted_text):
     if not ai_result:
         return '<p class="form__help">No issues detected.</p>'
@@ -417,6 +488,7 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append('</div>')
     parts.append('</aside>')
     parts.append('</div>')
+    parts.append(_build_mechanics_html(ai_result.get('mechanics')))
     parts.append('</div>')
     return ''.join(parts)
 
@@ -457,6 +529,16 @@ def _process_improve_job(job_id, extracted_text, warning):
         if analysis_error:
             _update_improve_job(job_id, status='error', progress=100, error=analysis_error, message=analysis_error)
             return
+        if mechanics_report.MECHANICS_REPORT_ENABLED and ai_result:
+            try:
+                ai_result['mechanics'] = mechanics_report.build_report(
+                    extracted_text,
+                    sentences=ai_result.get('sentences'),
+                    passive_sentence_ids=ai_result.get('passive_sentence_ids'),
+                    issues=ai_result.get('issues')
+                )
+            except Exception:
+                app_services.logger().exception("Mechanics report failed; continuing without it")
         combined_warning = warning
         if analysis_warning:
             if combined_warning:
