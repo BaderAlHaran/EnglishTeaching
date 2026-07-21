@@ -28,6 +28,20 @@ def _improve_context():
         'max_chars': IMPROVE_MAX_CHARS
     }
 
+
+def _normalize_text(text):
+    """Clean up PDF-style hard wrapping so analysis sees real sentences:
+    rejoin hyphenated line-wraps (con-\\ntrolled -> controlled) and merge
+    line breaks that fall mid-sentence. Blank-line paragraph breaks and
+    breaks after sentence-ending punctuation are preserved."""
+    if not text:
+        return text
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = re.sub(r'(\w)-\n(?=\w)', r'\1', text)
+    text = re.sub(r'(?<![.!?])\n(?!\n)', ' ', text)
+    text = re.sub(r'[ \t]{2,}', ' ', text)
+    return text.strip()
+
 def _ensure_submissions_table():
     conn, cursor = app_services.open_db()
     try:
@@ -618,6 +632,8 @@ def improve_ai():
                 app_services.logger().info("Improve AI truncated PDF to %s pages", IMPROVE_MAX_PAGES)
         else:
             extracted_text = text_input
+
+        extracted_text = _normalize_text(extracted_text)
 
         if not extracted_text:
             return render_template(
