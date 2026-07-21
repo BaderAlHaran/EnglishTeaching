@@ -516,7 +516,7 @@ def _serialize_improve_json(ai_result):
         return None
     return payload.replace('<', '\\u003c')
 
-def _process_improve_job(job_id, extracted_text, warning):
+def _process_improve_job(job_id, extracted_text, warning, language='en-US'):
     start_time = time.time()
     last_progress = -1
 
@@ -539,7 +539,8 @@ def _process_improve_job(job_id, extracted_text, warning):
             extracted_text,
             progress_cb=_progress_cb,
             timeout_seconds=IMPROVE_JOB_TIMEOUT_SECONDS,
-            start_time=start_time
+            start_time=start_time,
+            language=language
         )
         if analysis_error:
             _update_improve_job(job_id, status='error', progress=100, error=analysis_error, message=analysis_error)
@@ -581,13 +582,17 @@ def _process_improve_job(job_id, extracted_text, warning):
 import improve_analysis
 
 
-def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None):
+IMPROVE_LANGUAGES = {'en-US', 'en-GB'}
+
+
+def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, language='en-US'):
     return improve_analysis.run_local_analysis(
         text,
         progress_cb=progress_cb,
         timeout_seconds=timeout_seconds,
         start_time=start_time,
-        logger=app_services.logger()
+        logger=app_services.logger(),
+        language=language
     )
 
 
@@ -656,10 +661,14 @@ def improve_ai():
             _update_improve_job(job_id, status='error', progress=100, error=message, message=message)
             return redirect(url_for('improve_progress', job_id=job_id))
 
+        language = (request.form.get('language') or 'en-US').strip()
+        if language not in IMPROVE_LANGUAGES:
+            language = 'en-US'
+
         job_id = _create_improve_job(extracted_text, warning)
         threading.Thread(
             target=_process_improve_job,
-            args=(job_id, extracted_text, warning),
+            args=(job_id, extracted_text, warning, language),
             daemon=True
         ).start()
         return redirect(url_for('improve_progress', job_id=job_id))

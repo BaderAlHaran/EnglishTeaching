@@ -472,6 +472,14 @@
                         <div class="form__group">
                             <label class="form__label" for="ai-text">Paste your text</label>
                             <textarea class="form__textarea" id="ai-text" name="text" data-improve-input data-max-chars="{{ max_chars|default(40000, true) }}" placeholder="Paste your text here...">{{ prefill_text|default('', true)|e }}</textarea>
+                            <button class="improve-copy" type="button" data-improve-example style="margin-top: 8px;">Try an example</button>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="ai-language">English variant</label>
+                            <select class="form__select" id="ai-language" name="language" style="max-width: 240px;">
+                                <option value="en-US" selected>American English</option>
+                                <option value="en-GB">British English</option>
+                            </select>
                         </div>
                         <div class="form__group">
                             <label class="form__label" for="ai-file">Or upload a file (.pdf, .docx)</label>

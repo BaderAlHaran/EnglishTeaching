@@ -30,7 +30,7 @@ def _count_word_tokens(text):
     return len(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text))
 
 
-def _run_languagetool(text, logger):
+def _run_languagetool(text, logger, language='en-US'):
     """Query the LanguageTool API. Returns a list of matches, or None on any
     failure so callers can fall back to the local rules."""
     if not LANGUAGETOOL_ENABLED or not text.strip() or len(text) > LANGUAGETOOL_MAX_CHARS:
@@ -42,7 +42,7 @@ def _run_languagetool(text, logger):
     try:
         response = requests.post(
             LANGUAGETOOL_API_URL,
-            data={'text': text, 'language': 'en-US', 'level': LANGUAGETOOL_LEVEL},
+            data={'text': text, 'language': language, 'level': LANGUAGETOOL_LEVEL},
             timeout=LANGUAGETOOL_TIMEOUT_SECONDS
         )
         response.raise_for_status()
@@ -226,7 +226,7 @@ def _build_sentence_records(text, doc, end_punct_count, token_count, preprocess_
 
     return sentences, sentence_flags, doc_sentences
 
-def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, logger=None):
+def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, logger=None, language='en-US'):
     logger = logger or logging.getLogger(__name__)
     if not AI_CHECKER_ENABLED:
         return None, "Writing checker unavailable. Please use Human Review.", None
@@ -493,7 +493,7 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
     if progress_cb:
         progress_cb(14, "Running advanced grammar check...")
 
-    lt_matches = _run_languagetool(text, logger)
+    lt_matches = _run_languagetool(text, logger, language=language)
     lt_active = lt_matches is not None
     if lt_active:
         for match in lt_matches:

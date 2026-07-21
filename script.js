@@ -557,8 +557,30 @@ class ImproveInputStats {
     this.maxChars = parseInt(this.textarea.getAttribute('data-max-chars'), 10) || null;
     this.update = this.update.bind(this);
     this.textarea.addEventListener('input', this.update);
+    this.bindExampleButton();
     this.prefillFromRecheck();
     this.update();
+  }
+
+  bindExampleButton() {
+    const exampleBtn = document.querySelector('[data-improve-example]');
+    if (!exampleBtn) {
+      return;
+    }
+    const sample = [
+      'Social media has become an important part of student life. Many students use these platforms every day, but some educators believes they are harmful to learning.',
+      '',
+      'However, there is real concerns about heavy use. Studies was conducted showing that students who check there phones during study sessions recieve lower grades. They could of avoided this problem with better habits. Alot of students admit the distraction is very hard to resist, and the very constant notifications make it very difficult to focus.',
+      '',
+      'On the other hand, social media offers real benefits when used responsible. Educational creators explain difficult concepts in short videos that are easier to understand then traditional lectures. A student in a rural area can access the same content as a student in a big city.',
+      '',
+      'In conclusion, the affect social media has depends on the choices each student makes. Schools should teach responsible use instead of banning these platforms completely.'
+    ].join('\n');
+    exampleBtn.addEventListener('click', () => {
+      this.textarea.value = sample;
+      this.update();
+      this.textarea.focus();
+    });
   }
 
   prefillFromRecheck() {
