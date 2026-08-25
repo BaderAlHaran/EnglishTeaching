@@ -576,6 +576,11 @@ def free_essay_writing_help():
 def essay_form():
     return send_from_directory('.', 'essay-form.html')
 
+@app.route('/refunds')
+def refunds():
+    """Serve refund policy page"""
+    return send_from_directory('.', 'refunds.html')
+
 @app.route('/terms')
 def terms():
     return send_from_directory('.', 'terms.html')
@@ -604,7 +609,7 @@ def sitemap_xml():
     """Simple dynamic sitemap covering key pages"""
     base = request.url_root.rstrip('/')
     urls = [
-        "/", "/improve", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/faq"
+        "/", "/improve", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/refunds", "/faq"
     ]
     items = "\n".join(
         f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
@@ -676,6 +681,7 @@ CANONICAL_PAGE_REDIRECTS = {
     'faq.html': '/faq',
     'terms.html': '/terms',
     'privacy.html': '/privacy',
+    'refunds.html': '/refunds',
     'essay-form.html': '/essay-form',
     'free-essay-writing-help.html': '/free-essay-writing-help',
 }
