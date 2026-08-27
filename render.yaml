@@ -16,20 +16,14 @@ services:
       - key: ADMIN_PASSWORD
         generateValue: true
       - key: ADMIN_EMAIL
-        value: admin@essaywritingservice.com
+        value: contact@englishessaywriting.net
       - key: CONTACT_RECIPIENT
-        value: norakalmutairi@gmail.com
+        value: contact@englishessaywriting.net
+      - key: FROM_EMAIL
+        value: no-reply@englishessaywriting.net
+      - key: RESEND_API_KEY
+        sync: false
       - key: UPLOAD_FOLDER
         value: uploads
       - key: CUSTOM_DOMAIN
         sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_USE_TLS
-        value: "true"
