@@ -10,11 +10,11 @@ services:
       - key: FLASK_ENV
         value: production
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
       - key: ADMIN_USERNAME
         value: mikoandnenoarecool
       - key: ADMIN_PASSWORD
-        generateValue: true
+        sync: false
       - key: ADMIN_EMAIL
         value: contact@englishessaywriting.net
       - key: CONTACT_RECIPIENT
@@ -26,4 +26,8 @@ services:
       - key: UPLOAD_FOLDER
         value: uploads
       - key: CUSTOM_DOMAIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PORT
         sync: false
