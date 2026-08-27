@@ -98,11 +98,27 @@ def submit_essay():
             data.get('instructions') or 'None provided',
         ]
 
+        # Attach the uploaded draft so the document is preserved in the inbox.
+        # Render's filesystem is ephemeral, so the saved copy does not survive a
+        # deploy; the emailed copy is the durable one.
+        attachments = []
+        if file_path:
+            attachment, attach_err = app_services.build_attachment(file_path, file_name)
+            if attachment:
+                attachments.append(attachment)
+            else:
+                app_services.logger().warning(
+                    "Could not attach upload %s: %s", file_name, attach_err)
+                admin_body_lines.append(
+                    "NOTE: attachment unavailable (%s). Download it from the admin dashboard."
+                    % attach_err)
+
         admin_ok, admin_err = app_services.send_email(
             to_email=app_services.admin_email() or app_services.contact_recipient(),
             subject="New submission received",
             body="\n".join(admin_body_lines),
             reply_to=student_email,
+            attachments=attachments or None,
         )
         if not admin_ok:
             app_services.logger().error("Admin notification email failed: %s", admin_err)

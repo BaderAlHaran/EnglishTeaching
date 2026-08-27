@@ -1,6 +1,7 @@
 _open_db = None
 _is_postgres = None
 _send_email = None
+_build_attachment = None
 _allowed_file = None
 _hash_password = None
 _verify_password = None
@@ -20,6 +21,7 @@ def configure(
     open_db,
     is_postgres,
     send_email,
+    build_attachment,
     allowed_file,
     hash_password,
     verify_password,
@@ -33,13 +35,14 @@ def configure(
     upload_folder,
     logger,
 ):
-    global _open_db, _is_postgres, _send_email, _allowed_file
+    global _open_db, _is_postgres, _send_email, _build_attachment, _allowed_file
     global _hash_password, _verify_password, _email_regex
     global _admin_username, _admin_password, _admin_email, _admin_reset_token
     global _from_email, _contact_recipient, _upload_folder, _logger
     _open_db = open_db
     _is_postgres = is_postgres
     _send_email = send_email
+    _build_attachment = build_attachment
     _allowed_file = allowed_file
     _hash_password = hash_password
     _verify_password = verify_password
@@ -64,6 +67,10 @@ def is_postgres():
 
 def send_email(*args, **kwargs):
     return _send_email(*args, **kwargs)
+
+
+def build_attachment(*args, **kwargs):
+    return _build_attachment(*args, **kwargs)
 
 
 def allowed_file(filename):

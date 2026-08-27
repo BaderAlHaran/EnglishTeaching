@@ -719,7 +719,31 @@ def _send_contact_email(sender_email: str, message_text: str):
 
     return _send_email(to_email=admin_recipient, subject=subject, body=body, reply_to=sender_email)
 
-def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
+# Resend caps total message size around 40MB; stay well under it.
+MAX_ATTACHMENT_BYTES = int(os.environ.get('MAX_ATTACHMENT_BYTES', str(15 * 1024 * 1024)))
+
+
+def _build_attachment(file_path: str, file_name: str = None):
+    """Read a saved upload into a Resend attachment dict. Returns None if the
+    file is missing or too large, so email still sends without it."""
+    if not file_path or not os.path.exists(file_path):
+        return None, 'file not found'
+    try:
+        size = os.path.getsize(file_path)
+        if size > MAX_ATTACHMENT_BYTES:
+            return None, 'file too large to attach (%s bytes)' % size
+        with open(file_path, 'rb') as handle:
+            import base64
+            content = base64.b64encode(handle.read()).decode('ascii')
+        return {
+            "filename": file_name or os.path.basename(file_path),
+            "content": content
+        }, ''
+    except Exception as exc:
+        return None, str(exc)
+
+
+def _send_email(to_email: str, subject: str, body: str, reply_to: str = None, attachments=None):
     """Generic email sender using Resend"""
     if not RESEND_API_KEY or not FROM_EMAIL or not to_email:
         return False, 'Email not configured or recipient missing'
@@ -736,6 +760,8 @@ def _send_email(to_email: str, subject: str, body: str, reply_to: str = None):
     }
     if reply_to:
         payload["reply_to"] = [reply_to]
+    if attachments:
+        payload["attachments"] = attachments
 
     try:
         resend.Emails.send(payload)
@@ -923,6 +949,7 @@ app_services.configure(
     open_db=_open_db,
     is_postgres=_is_postgres,
     send_email=_send_email,
+    build_attachment=_build_attachment,
     allowed_file=allowed_file,
     hash_password=hash_password,
     verify_password=verify_password,
