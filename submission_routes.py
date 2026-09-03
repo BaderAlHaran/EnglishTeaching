@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 
 from flask import jsonify, request
@@ -153,10 +154,25 @@ def submit_review():
     conn = None
     try:
         data = request.get_json(silent=True) or request.form or {}
+
+        # Honeypot: a real person never sees this field, so anything in it is a bot.
+        # Return success so the bot does not learn it was filtered.
+        if (data.get('website') or '').strip():
+            app_services.logger().info("Honeypot triggered; ignoring review submission.")
+            return jsonify({'success': True})
+
         required_fields = ['name', 'university', 'rating', 'review_text']
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'error': f'{field} is required'}), 400
+
+        # Genuine reviews do not contain links. This blocks the domain-broker and
+        # SEO spam that makes up nearly all unsolicited review submissions.
+        review_text = str(data.get('review_text') or '')
+        if re.search(r'https?://|www\.|\b[\w-]+\.(?:com|net|org|io|ru|xyz|shop|info|biz|top)\b',
+                     review_text, flags=re.IGNORECASE):
+            app_services.logger().info("Review rejected: contains a link.")
+            return jsonify({'error': 'Reviews cannot contain links or web addresses.'}), 400
 
         conn, cursor = app_services.open_db()
         cursor.execute('''

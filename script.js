@@ -356,7 +356,8 @@ class ReviewSystem {
       name: formData.get('name'),
       university: formData.get('university'),
       rating: parseInt(formData.get('rating')),
-      reviewText: formData.get('review')
+      reviewText: formData.get('review'),
+      website: formData.get('website') || ''
     };
 
     // Validate form
@@ -376,7 +377,8 @@ class ReviewSystem {
           name: review.name,
           university: review.university,
           rating: review.rating,
-          review_text: review.reviewText
+          review_text: review.reviewText,
+          website: review.website
         })
       });
       

@@ -279,6 +279,11 @@
             <div class="review__form-container">
                 <form class="review__form" id="reviewForm">
                     <h3 class="review__form-title">Write a Review</h3>
+                    <!-- Honeypot: bots fill this in, humans never see it -->
+                    <div class="form__group" style="display:none;" aria-hidden="true">
+                        <label for="reviewWebsite">Website</label>
+                        <input type="text" id="reviewWebsite" name="website" autocomplete="off" tabindex="-1">
+                    </div>
                     <div class="form__group">
                         <label for="reviewerName" class="form__label">Your Name</label>
                         <input type="text" id="reviewerName" name="name" class="form__input" required>
