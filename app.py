@@ -654,19 +654,21 @@ def track_visit():
     country_code = _get_country_code_from_request()
 
     conn, cursor = _open_db()
-    if _is_postgres():
-        cursor.execute('''
-            INSERT INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT (visitor_id, visit_date) DO NOTHING
-        ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
-    else:
-        cursor.execute('''
-            INSERT OR IGNORE INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
-    conn.commit()
-    conn.close()
+    try:
+        if _is_postgres():
+            cursor.execute('''
+                INSERT INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (visitor_id, visit_date) DO NOTHING
+            ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
+        else:
+            cursor.execute('''
+                INSERT OR IGNORE INTO visits (visitor_id, visit_date, first_path, referrer, user_agent, country_code)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (visitor_id, today, path_value, referrer_value, user_agent or None, country_code))
+        conn.commit()
+    finally:
+        conn.close()
 
     resp = make_response('', 204)
     if new_visitor_id:

@@ -52,7 +52,7 @@ def _languagetool_chunks(text, limit):
     return chunks
 
 
-def _run_languagetool(text, logger, language='en-US'):
+def _run_languagetool(text, logger, language='en-GB'):
     """Query the LanguageTool API, splitting long texts into multiple requests.
     Returns a list of matches (offsets relative to the full text), or None on
     total failure so callers can fall back to the local rules."""
@@ -261,7 +261,7 @@ def _build_sentence_records(text, doc, end_punct_count, token_count, preprocess_
 
     return sentences, sentence_flags, doc_sentences
 
-def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, logger=None, language='en-US'):
+def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, logger=None, language='en-GB'):
     logger = logger or logging.getLogger(__name__)
     if not AI_CHECKER_ENABLED:
         return None, "Writing checker unavailable. Please use Human Review.", None

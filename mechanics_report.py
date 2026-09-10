@@ -37,6 +37,34 @@ FILLER_PHRASES = [
     'in conclusion', 'in order to', 'of course', 'kind of', 'sort of', 'a lot'
 ]
 
+# Verb-derived nouns that bury the action in academic prose. Curated rather
+# than pattern-matched so that legitimate nouns ("government", "environment")
+# are never flagged, and so each one can suggest a real verb form.
+NOMINALIZATIONS = {
+    'implementation': 'implement', 'examination': 'examine', 'consideration': 'consider',
+    'utilisation': 'use', 'utilization': 'use', 'investigation': 'investigate',
+    'application': 'apply', 'evaluation': 'evaluate', 'development': 'develop',
+    'improvement': 'improve', 'assessment': 'assess', 'measurement': 'measure',
+    'comparison': 'compare', 'discussion': 'discuss', 'explanation': 'explain',
+    'identification': 'identify', 'determination': 'determine', 'observation': 'observe',
+    'demonstration': 'demonstrate', 'preparation': 'prepare', 'reduction': 'reduce',
+    'creation': 'create', 'formation': 'form', 'establishment': 'establish',
+    'achievement': 'achieve', 'requirement': 'require', 'involvement': 'involve',
+    'acceptance': 'accept', 'performance': 'perform', 'occurrence': 'occur',
+    'provision': 'provide', 'expansion': 'expand', 'introduction': 'introduce',
+    'exploration': 'explore', 'interpretation': 'interpret', 'realisation': 'realise',
+    'realization': 'realize', 'recognition': 'recognise', 'contribution': 'contribute',
+}
+
+TO_BE_FORMS = {'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am'}
+
+# Above this share of "to be" verbs the prose reads as static.
+TO_BE_MAX_PERCENT = 12
+# Below this standard deviation of sentence length the rhythm reads as monotonous.
+SENTENCE_VARIETY_MIN_SD = 4.0
+# Below this moving-average type-token ratio the vocabulary reads as repetitive.
+LEXICAL_DIVERSITY_MIN = 0.65
+
 TRANSITION_OPENERS = [
     'however', 'therefore', 'additionally', 'furthermore', 'in contrast', 'for example',
     'as a result', 'moreover', 'consequently', 'on the other hand', 'in addition',
@@ -71,6 +99,73 @@ def _truncate(sentence_text, limit=140):
     return text[:limit].rsplit(' ', 1)[0] + '...'
 
 
+def _sentence_variety(sentences):
+    """Standard deviation of sentence length. Good prose varies; a low spread
+    means every sentence is the same shape."""
+    lengths = [len(_words(s['text'])) for s in sentences]
+    lengths = [n for n in lengths if n > 0]
+    if len(lengths) < 5:
+        return None, None
+    mean = sum(lengths) / len(lengths)
+    sd = (sum((n - mean) ** 2 for n in lengths) / len(lengths)) ** 0.5
+    return round(mean, 1), round(sd, 1)
+
+
+def _lexical_diversity(words_lower):
+    """Moving-average type-token ratio. Averaging fixed windows keeps the
+    figure comparable between short and long texts, unlike a raw ratio."""
+    window = 50
+    if len(words_lower) < window:
+        return round(len(set(words_lower)) / len(words_lower), 2) if words_lower else None
+    ratios = [len(set(words_lower[i:i + window])) / window
+              for i in range(len(words_lower) - window + 1)]
+    return round(sum(ratios) / len(ratios), 2)
+
+
+def _academic_style(text, sentences):
+    """Wordiness patterns that weaken academic prose: buried verbs, empty
+    sentence openers, and an over-reliance on forms of "to be"."""
+    lowered = text.lower()
+
+    # Nominalisations in the classic "the <noun> of" frame, which is
+    # unambiguous, unlike a bare "the <noun>".
+    found = []
+    for noun, verb in NOMINALIZATIONS.items():
+        hits = len(re.findall(r'\b(?:the|a|an)\s+' + noun + r'\s+of\b', lowered))
+        if hits:
+            found.append({'noun': noun, 'verb': verb, 'count': hits})
+    found.sort(key=lambda item: -item['count'])
+
+    # Empty openers: "There is a need for X" says less than "X is needed".
+    expletives = len(re.findall(r'(?:^|[.!?]\s+)(?:there|it)\s+(?:is|are|was|were)\b',
+                                text, flags=re.IGNORECASE))
+
+    words = _words(text)
+    to_be = sum(1 for w in words if w.lower() in TO_BE_FORMS)
+    to_be_percent = int(round(100 * to_be / len(words))) if words else 0
+
+    parts = []
+    if found:
+        listed = ', '.join('"the %s of" -> "%s"' % (f['noun'], f['verb']) for f in found[:3])
+        parts.append('%d buried verb%s: %s.'
+                     % (len(found), 's' if len(found) != 1 else '', listed))
+    if expletives:
+        parts.append('%d sentence%s open with "there is" or "it is".'
+                     % (expletives, 's' if expletives != 1 else ''))
+    if to_be_percent > TO_BE_MAX_PERCENT:
+        parts.append('Forms of "to be" make up %d%% of your words, above the %d%% guideline \u2014 '
+                     'try stronger verbs.' % (to_be_percent, TO_BE_MAX_PERCENT))
+    elif not parts:
+        parts.append('No buried verbs or empty sentence openers found.')
+
+    return {
+        'nominalisations': found[:5],
+        'expletiveOpeners': expletives,
+        'toBePercent': to_be_percent,
+        'summary': ' '.join(parts)
+    }
+
+
 def _sentence_clarity(sentences, passive_ids, issues):
     long_examples = []
     long_count = 0
@@ -101,10 +196,17 @@ def _sentence_clarity(sentences, passive_ids, issues):
     if run_on_count:
         parts.append(f"{run_on_count} possible run-on sentence{'s' if run_on_count != 1 else ''} detected.")
 
+    mean_len, sd_len = _sentence_variety(sentences)
+    if sd_len is not None and sd_len < SENTENCE_VARIETY_MIN_SD:
+        parts.append('Your sentences are all a similar length (average %s words, spread %s) \u2014 '
+                     'varying them would improve the rhythm.' % (mean_len, sd_len))
+
     return {
         'longSentenceCount': long_count,
         'passiveVoicePercent': passive_percent,
         'runOnCount': run_on_count,
+        'meanSentenceLength': mean_len,
+        'sentenceLengthSD': sd_len,
         'examples': long_examples,
         'summary': ' '.join(parts)
     }
@@ -137,9 +239,15 @@ def _repetition_variety(text):
         listed = ', '.join(f"\"{item['phrase']}\" ({item['count']}x)" for item in overused)
         parts.append(f"Overused filler: {listed}.")
 
+    diversity = _lexical_diversity([w.lower() for w in words])
+    if diversity is not None and diversity < LEXICAL_DIVERSITY_MIN:
+        parts.append('Vocabulary variety is low (%.2f) \u2014 you reuse the same words often.'
+                     % diversity)
+
     return {
         'repeatedWords': repeated,
         'overusedFillers': overused,
+        'lexicalDiversity': diversity,
         'summary': ' '.join(parts)
     }
 
@@ -228,6 +336,70 @@ def _readability(text, sentences):
     }
 
 
+# Style penalty weights. Counts are normalised per 100 words so a long essay
+# is not punished simply for being long. Each component is capped so no single
+# weakness can sink the score, and the total is capped too: grammar and
+# spelling remain the primary signal.
+PENALTY_PER_NOMINALIZATION = 1.5
+PENALTY_PER_EXPLETIVE = 1.5
+PENALTY_PER_TO_BE_POINT = 0.8
+PENALTY_PER_PASSIVE_POINT = 0.3
+PENALTY_MONOTONOUS = 4
+PENALTY_LOW_DIVERSITY = 4
+PENALTY_CAP_PER_COMPONENT = 6
+STYLE_PENALTY_CAP = 25
+
+
+def style_penalty(report, word_count):
+    """Points to deduct from the writing score for style weaknesses that
+    grammar checking cannot see. Returns (penalty, breakdown)."""
+    if not report or not word_count:
+        return 0, []
+
+    def per_100(n):
+        return 100.0 * n / word_count
+
+    def capped(value):
+        return min(value, PENALTY_CAP_PER_COMPONENT)
+
+    style = report.get('academicStyle') or {}
+    clarity = report.get('sentenceClarity') or {}
+    variety = report.get('repetitionVariety') or {}
+
+    breakdown = []
+
+    noms = sum(item.get('count', 0) for item in (style.get('nominalisations') or []))
+    if noms:
+        pts = capped(PENALTY_PER_NOMINALIZATION * per_100(noms))
+        breakdown.append(('buried verbs', round(pts, 1)))
+
+    expl = style.get('expletiveOpeners') or 0
+    if expl:
+        pts = capped(PENALTY_PER_EXPLETIVE * per_100(expl))
+        breakdown.append(('empty sentence openers', round(pts, 1)))
+
+    to_be = style.get('toBePercent') or 0
+    if to_be > TO_BE_MAX_PERCENT:
+        pts = capped(PENALTY_PER_TO_BE_POINT * (to_be - TO_BE_MAX_PERCENT))
+        breakdown.append(('"to be" overuse', round(pts, 1)))
+
+    passive = clarity.get('passiveVoicePercent') or 0
+    if passive > PASSIVE_RECOMMENDED_PERCENT:
+        pts = min(PENALTY_PER_PASSIVE_POINT * (passive - PASSIVE_RECOMMENDED_PERCENT), 4)
+        breakdown.append(('passive voice', round(pts, 1)))
+
+    sd = clarity.get('sentenceLengthSD')
+    if sd is not None and sd < SENTENCE_VARIETY_MIN_SD:
+        breakdown.append(('monotonous sentence length', PENALTY_MONOTONOUS))
+
+    diversity = variety.get('lexicalDiversity')
+    if diversity is not None and diversity < LEXICAL_DIVERSITY_MIN:
+        breakdown.append(('repetitive vocabulary', PENALTY_LOW_DIVERSITY))
+
+    total = min(sum(pts for _, pts in breakdown), STYLE_PENALTY_CAP)
+    return int(round(total)), breakdown
+
+
 def build_report(text, sentences=None, passive_sentence_ids=None, issues=None):
     """Build the mechanics report. All inputs beyond text are optional; when
     the caller has analysis results (sentence records, passive ids, issues)
@@ -243,6 +415,7 @@ def build_report(text, sentences=None, passive_sentence_ids=None, issues=None):
     return {
         'sentenceClarity': _sentence_clarity(sentences, passive_sentence_ids, issues),
         'repetitionVariety': _repetition_variety(text),
+        'academicStyle': _academic_style(text, sentences),
         'structuralSignals': _structural_signals(text, sentences),
         'readability': _readability(text, sentences)
     }

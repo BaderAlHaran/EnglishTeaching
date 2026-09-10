@@ -199,24 +199,25 @@ def submit_review():
 
 def get_reviews():
     conn, cursor = app_services.open_db()
-    cursor.execute('''
-        SELECT name, university, rating, review_text, created_at
-        FROM reviews
-        WHERE is_approved = %s
-        ORDER BY created_at DESC
-    ''', (True,))
+    try:
+        cursor.execute('''
+            SELECT name, university, rating, review_text, created_at
+            FROM reviews
+            WHERE is_approved = %s
+            ORDER BY created_at DESC
+        ''', (True,))
 
-    reviews = []
-    for row in cursor.fetchall():
-        reviews.append({
-            'name': row[0],
-            'university': row[1],
-            'rating': row[2],
-            'review_text': row[3],
-            'created_at': row[4],
-        })
-
-    conn.close()
+        reviews = []
+        for row in cursor.fetchall():
+            reviews.append({
+                'name': row[0],
+                'university': row[1],
+                'rating': row[2],
+                'review_text': row[3],
+                'created_at': row[4],
+            })
+    finally:
+        conn.close()
     resp = jsonify(reviews)
     resp.headers['Cache-Control'] = 'no-store, max-age=0'
     return resp

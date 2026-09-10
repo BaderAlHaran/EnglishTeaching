@@ -1,3 +1,39 @@
+# --- Python ---
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Secrets and local config ---
+.env
+.env.*
+!env.example
 settings.json
+
+# --- Local databases (production uses Postgres via DATABASE_URL) ---
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Test artifacts ---
+.tmp_pytest/
+
+# --- Runtime data: user uploads are private and regenerated per request ---
+uploads/
+
+# --- Logs ---
+*.log
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

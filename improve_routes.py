@@ -363,6 +363,7 @@ def _build_mechanics_html(mechanics):
 
     clarity = mechanics.get('sentenceClarity') or {}
     variety = mechanics.get('repetitionVariety') or {}
+    style = mechanics.get('academicStyle') or {}
     structure = mechanics.get('structuralSignals') or {}
     readability = mechanics.get('readability') or {}
 
@@ -383,6 +384,23 @@ def _build_mechanics_html(mechanics):
         len(variety.get('repeatedWords') or []) + len(variety.get('overusedFillers') or []),
         variety.get('summary', ''),
         variety_details
+    ))
+
+    style_details = [
+        'Replace "the %s of" with "%s" (%dx)' % (item['noun'], item['verb'], item['count'])
+        for item in (style.get('nominalisations') or [])
+    ]
+    if style.get('expletiveOpeners'):
+        style_details.append(
+            '%d sentence(s) start with "there is" or "it is" - rewrite to lead with the subject'
+            % style['expletiveOpeners'])
+    if style.get('toBePercent'):
+        style_details.append('Forms of "to be": %d%% of words' % style['toBePercent'])
+    parts.append(_card(
+        'Academic Style',
+        len(style.get('nominalisations') or []) + (style.get('expletiveOpeners') or 0),
+        style.get('summary', ''),
+        style_details
     ))
 
     transition = structure.get('transitionOpenerPercent')
@@ -444,6 +462,11 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append(f'<div class="improve-score">{escape(str(score))}</div>')
     parts.append('<div class="improve-score-label">Writing score</div>')
     parts.append(f'<div class="improve-score-meta">{escape(str(issue_total))} suggestions</div>')
+    style_penalty = ai_result.get('style_penalty')
+    if style_penalty:
+        reasons = ', '.join(item['reason'] for item in (ai_result.get('style_penalty_breakdown') or []))
+        parts.append(
+            f'<div class="improve-score-meta">-{escape(str(style_penalty))} for style: {escape(reasons)}</div>')
     parts.append('</div>')
     parts.append('<div class="improve-stat-grid">')
     parts.append(f'<div class="improve-stat"><div class="improve-stat__value">{_fmt(word_count)}</div><div class="improve-stat__label">Words</div></div>')
@@ -558,7 +581,7 @@ def _serialize_improve_json(ai_result):
         return None
     return payload.replace('<', '\\u003c')
 
-def _process_improve_job(job_id, extracted_text, warning, language='en-US'):
+def _process_improve_job(job_id, extracted_text, warning, language='en-GB'):
     start_time = time.time()
     last_progress = -1
 
@@ -595,6 +618,16 @@ def _process_improve_job(job_id, extracted_text, warning, language='en-US'):
                     passive_sentence_ids=ai_result.get('passive_sentence_ids'),
                     issues=ai_result.get('issues')
                 )
+                # Grammar alone can rate turgid prose highly, so deduct for the
+                # style weaknesses the mechanics report surfaces.
+                penalty, breakdown = mechanics_report.style_penalty(
+                    ai_result['mechanics'], (ai_result.get('stats') or {}).get('word_count'))
+                if penalty:
+                    ai_result['style_penalty'] = penalty
+                    ai_result['style_penalty_breakdown'] = [
+                        {'reason': reason, 'points': pts} for reason, pts in breakdown]
+                    ai_result['score_before_style'] = ai_result.get('score')
+                    ai_result['score'] = max(35, (ai_result.get('score') or 100) - penalty)
             except Exception:
                 app_services.logger().exception("Mechanics report failed; continuing without it")
         combined_warning = warning
@@ -627,7 +660,7 @@ import improve_analysis
 IMPROVE_LANGUAGES = {'en-US', 'en-GB'}
 
 
-def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, language='en-US'):
+def _run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=None, language='en-GB'):
     return improve_analysis.run_local_analysis(
         text,
         progress_cb=progress_cb,
@@ -703,7 +736,7 @@ def improve_ai():
             _update_improve_job(job_id, status='error', progress=100, error=message, message=message)
             return redirect(url_for('improve_progress', job_id=job_id))
 
-        language = (request.form.get('language') or 'en-US').strip()
+        language = (request.form.get('language') or 'en-GB').strip()
         if language not in IMPROVE_LANGUAGES:
             language = 'en-US'
 
@@ -1255,13 +1288,15 @@ def improve_progress(job_id):
 def improve_status(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = app_services.open_db()
-    cursor.execute('''
-        SELECT status, progress, message, updated_at, error
-        FROM improve_jobs
-        WHERE job_id = ?
-    ''', (job_id,))
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        cursor.execute('''
+            SELECT status, progress, message, updated_at, error
+            FROM improve_jobs
+            WHERE job_id = ?
+        ''', (job_id,))
+        row = cursor.fetchone()
+    finally:
+        conn.close()
     if not row:
         return jsonify({'status': 'error', 'progress': 100, 'message': 'Job not found.'}), 404
     status, progress, message, updated_at, error = row
