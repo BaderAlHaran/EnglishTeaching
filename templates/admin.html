@@ -750,7 +750,7 @@
                             <th>ID</th>
                             <th>Name</th>
                             <th>Email</th>
-                            <th>Mode</th>
+                            <th>Source</th>
                             <th>Status</th>
                             <th>Submitted</th>
                             <th>Preview</th>
@@ -774,9 +774,11 @@
                                     <span class="no-file">Missing</span>
                                 {% endif %}
                             </td>
-                            <td data-label="Mode">
-                                {% if sub.mode == 'after_ai' %}
-                                    After AI
+                            <td data-label="Source">
+                                {% if sub.source == 'IELTS checker' %}
+                                    IELTS checker
+                                {% elif sub.source or sub.mode == 'after_ai' %}
+                                    Essay checker
                                 {% else %}
                                     Human Only
                                 {% endif %}

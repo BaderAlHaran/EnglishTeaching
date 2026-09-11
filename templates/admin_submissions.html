@@ -98,6 +98,7 @@
         .badge-new { background: #e0f2fe; color: #0369a1; }
         .badge-human { background: #fef3c7; color: #b45309; }
         .badge-ai { background: #ede9fe; color: #6d28d9; }
+        .badge-ielts { background: #dcfce7; color: #15803d; }
         details {
             margin-top: 6px;
         }
@@ -171,7 +172,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Created</th>
-                        <th>Mode</th>
+                        <th>Source</th>
                         <th>Status</th>
                         <th>Details</th>
                     </tr>
@@ -181,9 +182,11 @@
                     <tr>
                         <td data-label="ID">{{ sub.id }}</td>
                         <td data-label="Created">{{ sub.created_at }}</td>
-                        <td data-label="Mode">
-                            {% if sub.mode == 'after_ai' %}
-                                <span class="badge badge-ai">From checker</span>
+                        <td data-label="Source">
+                            {% if sub.source == 'IELTS checker' %}
+                                <span class="badge badge-ielts">IELTS checker</span>
+                            {% elif sub.source or sub.mode == 'after_ai' %}
+                                <span class="badge badge-ai">Essay checker</span>
                             {% else %}
                                 <span class="badge badge-human">Human Only</span>
                             {% endif %}

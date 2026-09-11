@@ -1264,6 +1264,15 @@ def _format_checker_summary(checker):
     return lines
 
 
+def request_source(ai_results_json):
+    """Where a review request came from, for the admin lists: 'IELTS checker',
+    'Essay checker', or None when no checker results were attached."""
+    checker = _checker_summary_from_json(ai_results_json)
+    if not checker:
+        return None
+    return 'IELTS checker' if checker.get('ielts') else 'Essay checker'
+
+
 def _checker_text_for_admin(ai_results_json):
     checker = _checker_summary_from_json(ai_results_json)
     return '\n'.join(_format_checker_summary(checker)) if checker else ''
@@ -1506,7 +1515,8 @@ def admin_submissions():
             'requester_email': row[8],
             'requester_phone': row[9],
             'reviewer_note': row[10],
-            'checker_text': _checker_text_for_admin(row[5])
+            'checker_text': _checker_text_for_admin(row[5]),
+            'source': request_source(row[5])
         })
     return render_template('admin_submissions.html', submissions=submissions)
 

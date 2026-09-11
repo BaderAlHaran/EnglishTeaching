@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flask import flash, jsonify, redirect, render_template, request, session, send_file, url_for
 
 import app_services
+import improve_routes
 
 _ensure_submissions_table = None
 
@@ -102,7 +103,7 @@ def admin():
 
     cursor.execute('''
         SELECT id, submission_id, created_at, mode, extracted_text, status,
-               requester_name, requester_email, requester_phone
+               requester_name, requester_email, requester_phone, ai_results_json
         FROM submissions
         ORDER BY created_at DESC
         LIMIT 25
@@ -123,6 +124,7 @@ def admin():
             'requester_name': row[6],
             'requester_email': row[7],
             'requester_phone': row[8],
+            'source': improve_routes.request_source(row[9]),
         })
 
     cursor.execute('''

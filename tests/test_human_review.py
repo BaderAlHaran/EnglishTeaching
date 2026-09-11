@@ -169,8 +169,31 @@ def test_admin_page_shows_readable_results_and_note(client, app_module, monkeypa
     submit(client, app_module, monkeypatch, ai_results_json=checker_json(), reviewer_note=NOTE)
     login_admin(client)
     body = client.get("/admin/submissions").data.decode("utf-8")
-    assert "From checker" in body
+    assert "IELTS checker" in body
     assert "Checker results" in body
     assert "Came from: IELTS writing checker, Task 2 essay" in body
     assert "Note from the student" in body
     assert NOTE in body
+
+
+def test_request_source_labels(app_module):
+    routes = app_module.improve_routes
+    assert routes.request_source(checker_json()) == "IELTS checker"
+    assert routes.request_source(checker_json(ielts=False)) == "Essay checker"
+    assert routes.request_source("") is None
+    assert routes.request_source("{broken") is None
+
+
+def test_admin_lists_show_where_each_request_came_from(client, app_module, monkeypatch):
+    submit(client, app_module, monkeypatch, ai_results_json=checker_json())
+    submit(client, app_module, monkeypatch, ai_results_json=checker_json(ielts=False))
+    submit(client, app_module, monkeypatch)  # sent straight from the form, no checker results
+    login_admin(client)
+
+    listing = client.get("/admin/submissions").data.decode("utf-8")
+    badges = re.findall(r'class="badge badge-(?:ielts|ai|human)">([^<]+)<', listing)
+    assert sorted(badges) == ["Essay checker", "Human Only", "IELTS checker"]
+
+    dashboard = client.get("/admin").data.decode("utf-8")
+    sources = [s.strip() for s in re.findall(r'data-label="Source">(.*?)</td>', dashboard, re.S)]
+    assert sorted(sources) == ["Essay checker", "Human Only", "IELTS checker"]
