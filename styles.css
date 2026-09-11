@@ -1550,6 +1550,12 @@ button {
   font-size: var(--fs-base);
 }
 
+.faq__answer a {
+  text-decoration: underline;
+  text-decoration-color: var(--accent-color);
+  text-underline-offset: 2px;
+}
+
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 1024px) {
   .hero__container {
