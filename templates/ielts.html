@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free IELTS Writing Checker for Task 1 and Task 2 | EnglishEssayWriting.net</title>
+    <meta name="description" content="Check an IELTS Writing Task 1 or Task 2 answer for free. See your word count against the minimum, your paragraphing, the Task 1 overview, contractions, informal words and grammar. No sign-up.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"></noscript>
+
+    <!-- Font Awesome -->
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+    <link rel="canonical" href="https://englishessaywriting.net/ielts-writing-checker">
+    <meta property="og:title" content="Free IELTS Writing Checker for Task 1 and Task 2">
+    <meta property="og:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://englishessaywriting.net/ielts-writing-checker">
+    <meta property="og:image" content="https://englishessaywriting.net/logo.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Free IELTS Writing Checker for Task 1 and Task 2">
+    <meta name="twitter:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+
+    <!-- WebApplication Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "IELTS Writing Checker",
+      "url": "https://englishessaywriting.net/ielts-writing-checker",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Free checker for IELTS Writing Task 1 and Task 2 answers: word count against the minimum, paragraph structure, the Task 1 overview, formal language, grammar and spelling. It does not estimate band scores.",
+      "publisher": {
+        "@type": "Organization",
+        "name": "EnglishEssayWriting.net",
+        "url": "https://englishessaywriting.net/"
+      }
+    }
+    </script>
+
+    <!-- FAQPage Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Does the IELTS writing checker give a band score?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. A reliable band score needs a trained examiner, or software tested against a large set of examiner-marked scripts. This checker sticks to what can be measured dependably: length, paragraphing, formal language, grammar and spelling. If you want a person to read your answer, you can request a human review for a flat $25."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do words copied from the question count towards the word count?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Examiners do not count wording copied directly from the question, so an answer that looks long enough can still fall short. Paste the question into the question box and the checker shows how many of your words are copied and how many count."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a maximum word count in IELTS Writing?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Writing far more than the minimum does not earn extra marks and leaves less time to check your work. Task 2 counts for twice as much as Task 1, so do not let Task 1 eat into your 40 minutes for Task 2."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use contractions in IELTS Writing?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Avoid them in Task 2 and in Academic Task 1, where examiners expect a formal style: write do not instead of don't, and it is instead of it's. General Training Task 1 letters are different, because an informal letter to a friend can use contractions. That is why this checker does not cover letters yet."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How accurate is the word count?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It counts words and numbers the way most word counters do, so 45% and 2010 each count as one word. Examiners may treat hyphenated words and symbols slightly differently, so aim comfortably above the minimum rather than exactly on it."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is the IELTS writing checker free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, with no sign-up. Your text is used only to generate feedback and is not published. Grammar checking uses the LanguageTool service, as explained in our privacy policy."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <style>
+        .improve-hero {
+            padding: calc(70px + var(--space-24)) 0 var(--space-16);
+            background:
+                radial-gradient(circle at top left, rgba(39, 174, 96, 0.1), transparent 28%),
+                linear-gradient(135deg, var(--background-secondary) 0%, var(--white) 100%);
+            text-align: center;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        .improve-hero__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-5xl);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-4);
+            letter-spacing: -0.02em;
+        }
+        .improve-hero__description {
+            font-size: var(--fs-xl);
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+        .improve-hero__note {
+            margin-top: var(--space-6);
+            color: var(--text-secondary);
+            font-size: var(--fs-base);
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--gray-200);
+        }
+        .improve-section {
+            padding: var(--space-20) 0 var(--space-24);
+            background: var(--background-secondary);
+        }
+        .improve-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+            gap: var(--space-10);
+            align-items: start;
+        }
+        .improve-card {
+            background: var(--white);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-10);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+            position: relative;
+        }
+        .improve-card--soft {
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+        }
+        .improve-card__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-2xl);
+            font-weight: 600;
+            margin-bottom: var(--space-2);
+        }
+        .improve-card__subtitle {
+            color: var(--text-secondary);
+            margin-bottom: var(--space-6);
+            max-width: 62ch;
+        }
+        .improve-editor__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+            flex-wrap: wrap;
+        }
+        .improve-editor__meta {
+            display: flex;
+            gap: var(--space-3);
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+            align-items: center;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-full);
+            background: linear-gradient(180deg, var(--gray-100), var(--white));
+            border: 1px solid var(--gray-200);
+            font-variant-numeric: tabular-nums;
+        }
+        .improve-card .form__textarea {
+            min-height: 320px;
+            border-width: 1px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+            box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+        .improve-card .form__textarea.ielts-question {
+            min-height: 96px;
+        }
+        .improve-card .form__textarea:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px rgba(39, 174, 96, 0.12);
+        }
+        .improve-actions {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .improve-side {
+            display: grid;
+            gap: var(--space-4);
+        }
+        .improve-side__title {
+            font-family: var(--font-primary);
+            font-size: var(--fs-xl);
+            margin-bottom: var(--space-3);
+        }
+        .improve-checklist {
+            display: grid;
+            gap: var(--space-2);
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+        }
+        .improve-checklist li {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-2);
+        }
+        .improve-checklist li::before {
+            content: '';
+            flex: none;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            margin-top: 6px;
+        }
+        .improve-tip {
+            font-size: var(--fs-sm);
+            color: var(--text-secondary);
+        }
+        .improve-alert {
+            margin: 0 auto var(--space-6);
+            max-width: 800px;
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+            box-shadow: var(--shadow-sm);
+        }
+        .improve-alert--error {
+            background: #fdecea;
+            color: #b42318;
+            border: 1px solid #f5c2c7;
+        }
+        .improve-side .improve-card--soft:nth-child(1) {
+            background: linear-gradient(180deg, rgba(39, 174, 96, 0.06), rgba(255, 255, 255, 1));
+        }
+        .improve-side .improve-card--soft:nth-child(2) {
+            background: linear-gradient(180deg, rgba(37, 99, 235, 0.05), rgba(255, 255, 255, 1));
+        }
+        .improve-side .improve-card--soft:nth-child(3) {
+            background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 1));
+        }
+        .improve-hidden { display: none; }
+
+        .ielts-fieldset {
+            border: 0;
+            padding: 0;
+            margin: 0 0 var(--space-6);
+        }
+        .ielts-fieldset legend {
+            margin-bottom: var(--space-3);
+        }
+        .ielts-tasks {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--space-3);
+        }
+        .ielts-task {
+            display: flex;
+            gap: var(--space-3);
+            align-items: flex-start;
+            padding: var(--space-4);
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-md);
+            background: var(--white);
+            cursor: pointer;
+            transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+        }
+        .ielts-task:hover {
+            border-color: var(--accent-color);
+        }
+        .ielts-task:has(input:checked) {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.12);
+        }
+        .ielts-task:has(input:focus-visible) {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+        }
+        .ielts-task input {
+            margin-top: 4px;
+            accent-color: var(--accent-color);
+        }
+        .ielts-task strong {
+            display: block;
+            color: var(--text-primary);
+        }
+        .ielts-task small {
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+        }
+        .ielts-example {
+            margin-top: var(--space-2);
+            padding: var(--space-1) var(--space-3);
+            border: 1px solid var(--gray-300);
+            border-radius: var(--radius-full);
+            background: var(--white);
+            color: var(--text-primary);
+            font-size: var(--fs-sm);
+            cursor: pointer;
+        }
+        .ielts-example:hover {
+            border-color: var(--accent-color);
+        }
+        .ielts-glance {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--fs-sm);
+            font-variant-numeric: tabular-nums;
+        }
+        .ielts-glance th,
+        .ielts-glance td {
+            text-align: left;
+            padding: var(--space-2) var(--space-2) var(--space-2) 0;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        .ielts-glance thead th {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .ielts-faq h3 {
+            margin-top: var(--space-6);
+        }
+
+        @media (max-width: 768px) {
+            .improve-hero__title { font-size: var(--fs-4xl); }
+            .improve-card { padding: var(--space-7); }
+            .improve-card .form__textarea { min-height: 260px; }
+        }
+        @media (max-width: 960px) {
+            .improve-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 600px) {
+            .ielts-tasks { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body class="improve-page">
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav container">
+            <div class="nav__brand">
+                <div class="nav__logo" role="heading" aria-level="2">English Essay Writing</div>
+            </div>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item">
+                    <a href="/" class="nav__link">Home</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#services" class="nav__link">Services</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/#process" class="nav__link">Process</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/about" class="nav__link">About</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/contact" class="nav__link">Contact</a>
+                </li>
+                <li class="nav__item">
+                    <a href="/faq" class="nav__link">FAQ</a>
+                </li>
+            </ul>
+            <div class="nav__toggle" id="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </nav>
+    </header>
+
+    <section class="improve-hero">
+        <div class="container">
+            <h1 class="improve-hero__title">IELTS Writing Checker</h1>
+            <p class="improve-hero__description">Check your IELTS Task 1 or Task 2 answer before test day. It counts your words against the minimum, checks your paragraphs and flags anything too informal for the exam.</p>
+            <p class="improve-hero__note">No sign-up needed. It does not give a band score.</p>
+        </div>
+    </section>
+
+    <section class="improve-section">
+        <div class="container">
+            {% if error %}
+                <div class="improve-alert improve-alert--error">{{ error }}</div>
+            {% endif %}
+
+            <div class="improve-grid">
+                <div class="improve-card">
+                    <div class="improve-editor__header">
+                        <div>
+                            <h2 class="improve-card__title">Check your answer</h2>
+                            <p class="improve-card__subtitle">Paste your answer below. Adding the question is optional, but it lets the checker find wording you copied from it.</p>
+                        </div>
+                        <div class="improve-editor__meta">
+                            <span data-improve-word-count>0 words</span>
+                            <span data-improve-char-count>0 / {{ max_chars|default(40000, true) }} chars</span>
+                        </div>
+                    </div>
+                    <form action="/improve/ai" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="exam" value="ielts">
+                        <fieldset class="ielts-fieldset">
+                            <legend class="form__label">Which task is this?</legend>
+                            <div class="ielts-tasks">
+                                <label class="ielts-task">
+                                    <input type="radio" name="task" value="task2" data-min-words="250" {% if task != 'task1' %}checked{% endif %}>
+                                    <span><strong>Task 2 essay</strong><small>At least 250 words, about 40 minutes</small></span>
+                                </label>
+                                <label class="ielts-task">
+                                    <input type="radio" name="task" value="task1" data-min-words="150" {% if task == 'task1' %}checked{% endif %}>
+                                    <span><strong>Academic Task 1 report</strong><small>At least 150 words, about 20 minutes</small></span>
+                                </label>
+                            </div>
+                        </fieldset>
+                        <div class="form__group">
+                            <label class="form__label" for="ielts-question">The question (optional)</label>
+                            <textarea class="form__textarea ielts-question" id="ielts-question" name="question" rows="3" maxlength="2000" data-improve-question placeholder="Paste the task question here...">{{ question|default('', true)|e }}</textarea>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="ielts-answer">Your answer</label>
+                            <textarea class="form__textarea" id="ielts-answer" name="text" data-improve-input data-max-chars="{{ max_chars|default(40000, true) }}" placeholder="Paste your answer here. Leave a blank line between paragraphs.">{{ prefill_text|default('', true)|e }}</textarea>
+                            <button class="ielts-example" type="button" data-improve-example="#ielts-example-answer" data-example-question="#ielts-example-question" data-example-task="task2">Try an example</button>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="ielts-language">English variant</label>
+                            <select class="form__select" id="ielts-language" name="language" style="max-width: 240px;">
+                                <option value="en-GB" selected>British English</option>
+                                <option value="en-US">American English</option>
+                            </select>
+                            <span class="form__help">IELTS accepts either spelling, as long as you are consistent.</span>
+                        </div>
+                        <div class="improve-actions">
+                            <button class="btn btn--primary" type="submit">Check my answer</button>
+                        </div>
+                    </form>
+                    <textarea id="ielts-example-question" class="improve-hidden" aria-hidden="true" tabindex="-1">Some people think children should start school at a very early age, while others believe they should not begin until they are older. Discuss both views and give your own opinion.</textarea>
+                    <textarea id="ielts-example-answer" class="improve-hidden" aria-hidden="true" tabindex="-1">In this day and age, some people think children should start school at a very early age. Others believe it's better to wait until they are older. This essay will discuss both views.
+
+On one hand, starting early has alot of benefits. Kids who go to school at three or four learns to share and follow rules, and they don't struggle when primary school begins. Working parents also need somewhere safe for their children during the day, so early schooling is very helpful for families!
+
+On the other hand, young children needs time to play. Play builds creativity and confidence, and a classroom can't always offer that. Last but not least, children who start later often catch up quickly, so there is little advantage in rushing them.
+
+To sum up, I think children should start formal lessons at around six. Before that age, they should learn through play at home or in a nursery.</textarea>
+                </div>
+                <div class="improve-side">
+                    <div class="improve-card improve-card--soft">
+                        <h2 class="improve-side__title">What it checks</h2>
+                        <ul class="improve-checklist">
+                            <li>Word count against the minimum, leaving out wording copied from the question</li>
+                            <li>Paragraphs: an introduction, body paragraphs and a conclusion</li>
+                            <li>A clear overview in Task 1, and no personal opinions</li>
+                            <li>Contractions, informal words and exclamation marks</li>
+                            <li>Phrases examiners see in almost every script</li>
+                            <li>Grammar, spelling and style, the same as our <a href="/improve">essay checker</a></li>
+                        </ul>
+                    </div>
+                    <div class="improve-card improve-card--soft">
+                        <h2 class="improve-side__title">The Writing test at a glance</h2>
+                        <table class="ielts-glance">
+                            <thead>
+                                <tr><th scope="col">Task</th><th scope="col">Minimum</th><th scope="col">Time</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><th scope="row">Task 1</th><td>150 words</td><td>20 min</td></tr>
+                                <tr><th scope="row">Task 2</th><td>250 words</td><td>40 min</td></tr>
+                            </tbody>
+                        </table>
+                        <p class="improve-tip" style="margin-top: var(--space-3);">You get 60 minutes for both tasks. Task 2 counts for twice as much as Task 1, so it deserves the extra time.</p>
+                    </div>
+                    <div class="improve-card improve-card--soft">
+                        <h2 class="improve-side__title">What it can't do</h2>
+                        <p class="improve-tip">It can't tell whether you answered the question, how well you developed your ideas, or what band you would get. That takes a person reading your answer.</p>
+                        <p class="improve-tip" style="margin-top: var(--space-2);">You can <a href="/essay-form">request a human review</a> for a flat $25. General Training letters are not supported yet.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="improve-grid" style="margin-top: var(--space-12); grid-template-columns: 1fr;">
+                <div class="improve-card ielts-faq">
+                    <h2 class="improve-card__title">Frequently asked questions</h2>
+                    <h3 class="improve-side__title">Does the IELTS writing checker give a band score?</h3>
+                    <p class="improve-tip">No. A reliable band score needs a trained examiner, or software tested against a large set of examiner-marked scripts. This checker sticks to what can be measured dependably: length, paragraphing, formal language, grammar and spelling. If you want a person to read your answer, you can request a human review for a flat $25.</p>
+                    <h3 class="improve-side__title">Do words copied from the question count towards the word count?</h3>
+                    <p class="improve-tip">No. Examiners do not count wording copied directly from the question, so an answer that looks long enough can still fall short. Paste the question into the question box and the checker shows how many of your words are copied and how many count.</p>
+                    <h3 class="improve-side__title">Is there a maximum word count in IELTS Writing?</h3>
+                    <p class="improve-tip">No. Writing far more than the minimum does not earn extra marks and leaves less time to check your work. Task 2 counts for twice as much as Task 1, so do not let Task 1 eat into your 40 minutes for Task 2.</p>
+                    <h3 class="improve-side__title">Can I use contractions in IELTS Writing?</h3>
+                    <p class="improve-tip">Avoid them in Task 2 and in Academic Task 1, where examiners expect a formal style: write <em>do not</em> instead of <em>don't</em>, and <em>it is</em> instead of <em>it's</em>. General Training Task 1 letters are different, because an informal letter to a friend can use contractions. That is why this checker does not cover letters yet.</p>
+                    <h3 class="improve-side__title">How accurate is the word count?</h3>
+                    <p class="improve-tip">It counts words and numbers the way most word counters do, so 45% and 2010 each count as one word. Examiners may treat hyphenated words and symbols slightly differently, so aim comfortably above the minimum rather than exactly on it.</p>
+                    <h3 class="improve-side__title">Is the IELTS writing checker free?</h3>
+                    <p class="improve-tip">Yes, with no sign-up. Your text is used only to generate feedback and is not published. Grammar checking uses the LanguageTool service, as explained in our <a href="/privacy">privacy policy</a>.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <h3 class="footer__logo">English Essay Writing</h3>
+                    <p class="footer__description">
+                        Your trusted partner for academic excellence and professional essay writing services.
+                    </p>
+                </div>
+                <div class="footer__links">
+                    <h4 class="footer__title">Quick Links</h4>
+                    <ul class="footer__list">
+                        <li><a href="/" class="footer__link">Home</a></li>
+                        <li><a href="/improve" class="footer__link">Essay Checker</a></li>
+                        <li><a href="/about" class="footer__link">About</a></li>
+                        <li><a href="/contact" class="footer__link">Contact</a></li>
+                        <li><a href="/terms" class="footer__link">Terms</a></li>
+                        <li><a href="/privacy" class="footer__link">Privacy</a></li>
+                        <li><a href="/refunds" class="footer__link">Refunds</a></li>
+                    </ul>
+                </div>
+                <div class="footer__contact">
+                    <h4 class="footer__title">Contact Info</h4>
+                    <div class="footer__contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>contact@englishessaywriting.net</span>
+                    </div>
+                </div>
+            </div>
+            <div class="footer__bottom">
+                <p class="footer__copy">
+                    &copy; 2026 English Essay Writing. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/script.js" defer></script>
+</body>
+</html>

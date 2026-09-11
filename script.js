@@ -559,6 +559,9 @@ class ImproveInputStats {
     this.maxChars = parseInt(this.textarea.getAttribute('data-max-chars'), 10) || null;
     this.update = this.update.bind(this);
     this.textarea.addEventListener('input', this.update);
+    document.querySelectorAll('[data-min-words]').forEach((input) => {
+      input.addEventListener('change', this.update);
+    });
     this.bindExampleButton();
     this.prefillFromRecheck();
     this.update();
@@ -569,7 +572,7 @@ class ImproveInputStats {
     if (!exampleBtn) {
       return;
     }
-    const sample = [
+    const defaultSample = [
       'Social media has become an important part of student life. Many students use these platforms every day, but some educators believes they are harmful to learning.',
       '',
       'However, there is real concerns about heavy use. Studies was conducted showing that students who check there phones during study sessions recieve lower grades. They could of avoided this problem with better habits. Alot of students admit the distraction is very hard to resist, and the very constant notifications make it very difficult to focus.',
@@ -578,8 +581,25 @@ class ImproveInputStats {
       '',
       'In conclusion, the affect social media has depends on the choices each student makes. Schools should teach responsible use instead of banning these platforms completely.'
     ].join('\n');
+    // A page can supply its own example through a selector pointing at a
+    // hidden textarea (the IELTS page does); otherwise use the essay sample.
+    const readSource = (attr) => {
+      const selector = exampleBtn.getAttribute(attr);
+      const source = selector ? document.querySelector(selector) : null;
+      return source ? source.value : null;
+    };
     exampleBtn.addEventListener('click', () => {
-      this.textarea.value = sample;
+      this.textarea.value = readSource('data-improve-example') || defaultSample;
+      const question = readSource('data-example-question');
+      const questionField = document.querySelector('[data-improve-question]');
+      if (question !== null && questionField) {
+        questionField.value = question;
+      }
+      const task = exampleBtn.getAttribute('data-example-task');
+      const taskInput = task ? document.querySelector(`input[name="task"][value="${task}"]`) : null;
+      if (taskInput) {
+        taskInput.checked = true;
+      }
       this.update();
       this.textarea.focus();
     });
@@ -601,14 +621,19 @@ class ImproveInputStats {
   }
 
   countWords(text) {
-    const matches = text.trim().match(/[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?/g);
+    // Numbers count as words, and a curly apostrophe pasted from Word joins a
+    // word the same way a straight one does. Matches ielts_report.WORD_RE.
+    const matches = text.trim().match(/[A-Za-z0-9]+(?:['\u2019][A-Za-z0-9]+)?/g);
     return matches ? matches.length : 0;
   }
 
   update() {
     const text = this.textarea.value || '';
     const words = this.countWords(text);
-    this.wordEl.textContent = `${words} words`;
+    // On the IELTS page, show progress towards the chosen task's minimum.
+    const minInput = document.querySelector('[data-min-words]:checked');
+    const minWords = minInput ? parseInt(minInput.getAttribute('data-min-words'), 10) : 0;
+    this.wordEl.textContent = minWords ? `${words} / ${minWords} words` : `${words} words`;
     const charsLabel = this.maxChars ? `${text.length} / ${this.maxChars} chars` : `${text.length} chars`;
     this.charEl.textContent = charsLabel;
   }
@@ -742,7 +767,7 @@ class ImproveWorkspace {
         } catch (e) {
           // Storage unavailable (private mode); fall through to plain navigation.
         }
-        window.location.href = '/improve';
+        window.location.href = recheckBtn.getAttribute('data-recheck-url') || '/improve';
       });
     }
   }

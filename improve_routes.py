@@ -14,6 +14,7 @@ from markupsafe import Markup, escape
 
 import app_services
 import improve_analysis
+import ielts_report
 import mechanics_report
 
 IMPROVE_ALLOWED_EXTENSIONS = {'pdf', 'docx'}
@@ -21,6 +22,11 @@ IMPROVE_MAX_BYTES = 10 * 1024 * 1024
 IMPROVE_MAX_CHARS = int(os.environ.get('IMPROVE_MAX_CHARS', '40000'))
 IMPROVE_MAX_PAGES = int(os.environ.get('IMPROVE_MAX_PAGES', '10'))
 IMPROVE_JOB_TIMEOUT_SECONDS = int(os.environ.get('IMPROVE_JOB_TIMEOUT_SECONDS', '45'))
+IELTS_MAX_QUESTION_CHARS = 2000
+REVIEWER_NOTE_MAX_CHARS = 1000
+# The browser posts the checker's result JSON back with a review request;
+# anything larger than this is not a genuine result, so it is ignored.
+CHECKER_JSON_MAX_CHARS = 2_000_000
 
 
 def _improve_context():
@@ -124,6 +130,8 @@ def _ensure_submissions_table():
             cursor.execute('ALTER TABLE submissions ADD COLUMN requester_phone TEXT')
         if 'submission_id' not in columns:
             cursor.execute('ALTER TABLE submissions ADD COLUMN submission_id TEXT')
+        if 'reviewer_note' not in columns:
+            cursor.execute('ALTER TABLE submissions ADD COLUMN reviewer_note TEXT')
         conn.commit()
     finally:
         conn.close()
@@ -428,6 +436,41 @@ def _build_mechanics_html(mechanics):
     return ''.join(parts)
 
 
+# Pill label, text colour and background for each checklist status.
+IELTS_STATUS_STYLES = {
+    'pass': ('Good', '#027a48', '#ecfdf3'),
+    'warn': ('Check', '#b45309', '#fff7ed'),
+    'fail': ('Fix', '#b42318', '#fdecea'),
+    'info': ('Note', '#1d4ed8', '#eff6ff'),
+}
+
+
+def _build_ielts_html(report):
+    if not report:
+        return ""
+    rows = []
+    for check in report.get('checks') or []:
+        label, colour, background = IELTS_STATUS_STYLES.get(check.get('status'), IELTS_STATUS_STYLES['info'])
+        rows.append(
+            '<li style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #e5e7eb;">'
+            f'<span style="flex:none;min-width:54px;text-align:center;padding:2px 8px;border-radius:999px;'
+            f'background:{background};color:{colour};font-weight:600;font-size:12px;">{label}</span>'
+            f'<span><strong>{escape(check.get("title", ""))}</strong>'
+            f'<span style="display:block;color:#475569;font-size:14px;">{escape(check.get("detail", ""))}</span></span>'
+            '</li>'
+        )
+    return (
+        '<div class="improve-card" style="margin-bottom:20px;padding:18px 22px;">'
+        f'<h4 class="improve-document__title" style="margin-bottom:4px;">IELTS {escape(report.get("taskLabel", ""))} checklist</h4>'
+        f'<p class="improve-document__meta" style="margin:0 0 8px;">Minimum {escape(str(report.get("minimumWords", "")))} words, '
+        f'about {escape(str(report.get("minutes", "")))} minutes in the exam</p>'
+        f'<ul style="list-style:none;margin:0;padding:0;">{"".join(rows)}</ul>'
+        '<p class="form__help" style="margin-top:10px;">These checks cover length, structure and formal language. '
+        'They do not predict a band score or judge how well you answered the question.</p>'
+        '</div>'
+    )
+
+
 def _build_result_html(ai_result, highlighted_text):
     if not ai_result:
         return '<p class="form__help">No issues detected.</p>'
@@ -457,6 +500,7 @@ def _build_result_html(ai_result, highlighted_text):
 
     parts = []
     parts.append('<div class="improve-workspace" data-improve-workspace>')
+    parts.append(_build_ielts_html(ai_result.get('ielts')))
     parts.append('<div class="improve-overview">')
     parts.append('<div class="improve-score-card">')
     parts.append(f'<div class="improve-score">{escape(str(score))}</div>')
@@ -498,7 +542,12 @@ def _build_result_html(ai_result, highlighted_text):
     parts.append('<p class="improve-document__meta">Click a highlight to review and apply suggestions.</p>')
     parts.append('</div>')
     parts.append('<button class="improve-copy" type="button" data-improve-copy>Copy revised text</button>')
-    parts.append('<button class="improve-copy" type="button" data-improve-recheck>Edit &amp; re-check</button>')
+    recheck_url = '/improve'
+    if ai_result.get('ielts'):
+        recheck_url = '/ielts-writing-checker?task=' + (ai_result['ielts'].get('task') or ielts_report.DEFAULT_TASK)
+    parts.append(
+        f'<button class="improve-copy" type="button" data-improve-recheck data-recheck-url="{escape(recheck_url)}">'
+        'Edit &amp; re-check</button>')
     parts.append('</div>')
     parts.append(f'<div class="improve-highlight" data-improve-document>{highlighted_text}</div>')
     parts.append('</div>')
@@ -581,7 +630,42 @@ def _serialize_improve_json(ai_result):
         return None
     return payload.replace('<', '\\u003c')
 
-def _process_improve_job(job_id, extracted_text, warning, language='en-GB'):
+def _merge_ielts_highlights(ai_result):
+    """Add the IELTS findings (contractions, informal words, copied wording)
+    to the highlighted document, skipping any span another check already
+    marked so highlights never overlap."""
+    report = ai_result.get('ielts') or {}
+    issues = list(ai_result.get('issues') or [])
+    taken = [(i['start'], i['end']) for i in issues if not i.get('no_highlight')]
+    added = 0
+    for item in report.get('highlights') or []:
+        start, end = item['start'], item['end']
+        if any(start < taken_end and taken_start < end for taken_start, taken_end in taken):
+            continue
+        added += 1
+        issues.append({
+            'start': start,
+            'end': end,
+            'kind': 'style',
+            'message': item['message'],
+            'suggestions': item.get('suggestions') or [],
+            'sentence_id': None,
+            'no_highlight': False,
+            'is_rewrite': False,
+            'issue_id': f'ielts-{added}',
+        })
+        taken.append((start, end))
+    if not added:
+        return
+    issues.sort(key=lambda issue: (issue.get('start', 0), issue.get('end', 0)))
+    summary = improve_analysis._build_summary(issues)
+    ai_result['issues'] = issues
+    ai_result['summary'] = summary
+    ai_result['issue_total'] = (summary['spelling'] + summary['grammar'] + summary['style']
+                                + (ai_result.get('rewrite_count') or 0))
+
+
+def _process_improve_job(job_id, extracted_text, warning, language='en-GB', ielts=None):
     start_time = time.time()
     last_progress = -1
 
@@ -630,6 +714,20 @@ def _process_improve_job(job_id, extracted_text, warning, language='en-GB'):
                     ai_result['score'] = max(35, (ai_result.get('score') or 100) - penalty)
             except Exception:
                 app_services.logger().exception("Mechanics report failed; continuing without it")
+        if ielts and ai_result:
+            try:
+                report = ielts_report.build_report(
+                    extracted_text, task=ielts.get('task'), question=ielts.get('question'))
+                if report:
+                    ai_result['ielts'] = report
+                    # Show the same count the IELTS check uses (numbers included)
+                    # so the Words card and the checklist agree.
+                    stats = ai_result.get('stats') or {}
+                    stats['word_count'] = report['wordCount']
+                    ai_result['stats'] = stats
+                    _merge_ielts_highlights(ai_result)
+            except Exception:
+                app_services.logger().exception("IELTS report failed; continuing without it")
         combined_warning = warning
         if analysis_warning:
             if combined_warning:
@@ -688,9 +786,61 @@ def improve():
         **_improve_context()
     )
 
+def _render_input_page(error=None, prefill_text='', ielts=None):
+    """Re-show whichever form the student came from, keeping their text."""
+    if ielts is not None:
+        return render_template(
+            'ielts.html',
+            error=error,
+            prefill_text=prefill_text,
+            task=ielts.get('task'),
+            question=ielts.get('question') or '',
+            **_improve_context()
+        )
+    return render_template(
+        'improve.html',
+        ai_result=None,
+        highlighted_text=None,
+        extracted_text=None,
+        error=error,
+        ai_results_json=None,
+        human_notice=None,
+        prefill_text=prefill_text,
+        **_improve_context()
+    )
+
+
+def _ielts_options_from_form():
+    """The IELTS page posts exam=ielts with the task and the optional
+    question; the general checker sends neither."""
+    if (request.form.get('exam') or '').strip() != 'ielts':
+        return None
+    task = (request.form.get('task') or '').strip()
+    if task not in ielts_report.TASKS:
+        task = ielts_report.DEFAULT_TASK
+    question = (request.form.get('question') or '')[:IELTS_MAX_QUESTION_CHARS].strip()
+    return {'task': task, 'question': question}
+
+
+def ielts_page():
+    task = (request.args.get('task') or '').strip()
+    if task not in ielts_report.TASKS:
+        task = ielts_report.DEFAULT_TASK
+    return render_template(
+        'ielts.html',
+        error=None,
+        prefill_text='',
+        task=task,
+        question='',
+        **_improve_context()
+    )
+
+
 def improve_ai():
     extracted_text = ''
+    ielts = None
     try:
+        ielts = _ielts_options_from_form()
         text_input = (request.form.get('text') or '').strip()
         file = request.files.get('file')
         warning = None
@@ -698,17 +848,7 @@ def improve_ai():
         if file and file.filename:
             extracted_text, err, warning = _extract_text_from_upload(file)
             if err:
-                return render_template(
-                    'improve.html',
-                    ai_result=None,
-                    highlighted_text=None,
-                    extracted_text=None,
-                    error=err,
-                    ai_results_json=None,
-                    human_notice=None,
-                    prefill_text=text_input,
-                    **_improve_context()
-                )
+                return _render_input_page(error=err, prefill_text=text_input, ielts=ielts)
             if warning:
                 app_services.logger().info("Improve AI truncated PDF to %s pages", IMPROVE_MAX_PAGES)
         else:
@@ -717,17 +857,8 @@ def improve_ai():
         extracted_text = _normalize_text(extracted_text)
 
         if not extracted_text:
-            return render_template(
-                'improve.html',
-                ai_result=None,
-                highlighted_text=None,
-                extracted_text=None,
-                error="Please paste text or upload a file.",
-                ai_results_json=None,
-                human_notice=None,
-                prefill_text='',
-                **_improve_context()
-            )
+            message = "Please paste your answer." if ielts else "Please paste text or upload a file."
+            return _render_input_page(error=message, ielts=ielts)
 
         if len(extracted_text) > IMPROVE_MAX_CHARS:
             message = "This document is too long for online analysis. Please upload a shorter section or use Human Review."
@@ -743,23 +874,18 @@ def improve_ai():
         job_id = _create_improve_job(extracted_text, warning)
         threading.Thread(
             target=_process_improve_job,
-            args=(job_id, extracted_text, warning, language),
+            args=(job_id, extracted_text, warning, language, ielts),
             daemon=True
         ).start()
         return redirect(url_for('improve_progress', job_id=job_id))
     except Exception:
         app_services.logger().exception("Improve AI failed")
-        return render_template(
-            'improve.html',
-            ai_result=None,
-            highlighted_text=None,
-            extracted_text=None,
+        return _render_input_page(
             error="Writing checker failed. Please use Human Review.",
-            ai_results_json=None,
-            human_notice=None,
             prefill_text=extracted_text,
-            **_improve_context()
+            ielts=ielts
         )
+
 
 def improve_human_form():
     extracted_text = (request.form.get('extracted_text') or '').strip()
@@ -1055,6 +1181,94 @@ def improve_human():
         **_improve_context()
     )
 
+def _clean_line(value, limit):
+    """One line of plain text: collapsing whitespace stops a tampered value
+    from adding lines to the reviewer's email, and the length is capped."""
+    return ' '.join(str(value or '').split())[:limit]
+
+
+def _checker_summary_from_json(ai_results_json):
+    """The few facts a reviewer needs from the checker's results.
+
+    The browser posts the full result JSON back with a review request, so it
+    is untrusted: anything missing, malformed or oversized gives None. It also
+    accepts the stored summary it returns, so the admin page can reuse it."""
+    if not ai_results_json or len(ai_results_json) > CHECKER_JSON_MAX_CHARS:
+        return None
+    try:
+        data = json.loads(ai_results_json)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    def _number(value):
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return None
+
+    score = _number(data.get('score'))
+    if score is None:
+        return None
+    counts = data['summary'] if isinstance(data.get('summary'), dict) else data
+    stats = data['stats'] if isinstance(data.get('stats'), dict) else {}
+    summary = {
+        'score': score,
+        'words': _number(stats.get('word_count', data.get('words'))),
+        'spelling': _number(counts.get('spelling')) or 0,
+        'grammar': _number(counts.get('grammar')) or 0,
+        'style': _number(counts.get('style')) or 0,
+    }
+    ielts = data.get('ielts')
+    if isinstance(ielts, dict) and ielts.get('task') in ielts_report.TASKS:
+        raw_checks = ielts.get('checks') if isinstance(ielts.get('checks'), list) else []
+        summary['ielts'] = {
+            'task': ielts['task'],
+            'question': _clean_line(ielts.get('question'), IELTS_MAX_QUESTION_CHARS),
+            'checks': [
+                {'status': check['status'],
+                 'title': _clean_line(check.get('title'), 60),
+                 'detail': _clean_line(check.get('detail'), 300)}
+                for check in raw_checks[:12]
+                if isinstance(check, dict) and check.get('status') in IELTS_STATUS_STYLES
+            ],
+        }
+    return summary
+
+
+def _format_checker_summary(checker):
+    """Plain-text lines telling the reviewer where the text came from and
+    what the automatic checks found."""
+    if not checker:
+        return ["Came from: review form, no checker results attached"]
+    lines = []
+    ielts = checker.get('ielts')
+    if ielts:
+        lines.append("Came from: IELTS writing checker, %s" % ielts_report.TASKS[ielts['task']]['label'])
+        lines.append("Question: %s" % (ielts.get('question') or 'not given'))
+    else:
+        lines.append("Came from: essay checker")
+    lines += ["", "Checker results (score %d):" % checker['score']]
+    passed = []
+    for check in (ielts or {}).get('checks') or []:
+        if check['status'] == 'pass':
+            passed.append(check['title'])
+        else:
+            label = IELTS_STATUS_STYLES[check['status']][0].upper()
+            lines.append("  %-6s %s: %s" % (label, check['title'], check['detail']))
+    if passed:
+        lines.append("  %-6s %s" % ('GOOD', ', '.join(passed)))
+    lines.append("  Spelling %d, grammar %d, style %d"
+                 % (checker['spelling'], checker['grammar'], checker['style']))
+    return lines
+
+
+def _checker_text_for_admin(ai_results_json):
+    checker = _checker_summary_from_json(ai_results_json)
+    return '\n'.join(_format_checker_summary(checker)) if checker else ''
+
+
 def improve_human_submit():
     if request.form.get('website'):
         app_services.logger().info("Honeypot field triggered; ignoring improve submission.")
@@ -1075,6 +1289,8 @@ def improve_human_submit():
     requester_phone = (request.form.get('phone') or '').strip()
     instructions = (request.form.get('instructions') or '').strip()
     terms = request.form.get('terms')
+    ai_results_json = (request.form.get('ai_results_json') or '').strip()
+    reviewer_note = (request.form.get('reviewer_note') or '').strip()[:REVIEWER_NOTE_MAX_CHARS]
 
     if not full_name or not requester_email or not instructions:
         return render_template(
@@ -1083,6 +1299,8 @@ def improve_human_submit():
             requester_name=full_name,
             requester_email=requester_email,
             requester_phone=requester_phone,
+            ai_results_json=ai_results_json,
+            reviewer_note=reviewer_note,
             error="Please fill in all required fields."
         )
 
@@ -1093,6 +1311,8 @@ def improve_human_submit():
             requester_name=full_name,
             requester_email=requester_email,
             requester_phone=requester_phone,
+            ai_results_json=ai_results_json,
+            reviewer_note=reviewer_note,
             error="Please enter a valid email address."
         )
 
@@ -1103,6 +1323,8 @@ def improve_human_submit():
             requester_name=full_name,
             requester_email=requester_email,
             requester_phone=requester_phone,
+            ai_results_json=ai_results_json,
+            reviewer_note=reviewer_note,
             error="Please accept the terms and conditions."
         )
 
@@ -1113,16 +1335,27 @@ def improve_human_submit():
             requester_name=full_name,
             requester_email=requester_email,
             requester_phone=requester_phone,
+            ai_results_json=ai_results_json,
+            reviewer_note=reviewer_note,
             error=f"Text is too long. Please submit {IMPROVE_MAX_CHARS:,} characters or fewer."
         )
 
     name_parts = full_name.split()
     first_name = name_parts[0] if name_parts else "Improve"
     last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Request"
-    word_count = len(re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", instructions))
+    word_count = ielts_report.count_words(instructions)
     pages = max(1, int(math.ceil(word_count / 250))) if word_count else 1
-    deadline = datetime.utcnow().isoformat(timespec='minutes')
     submission_id = secrets.token_hex(8)
+
+    checker = _checker_summary_from_json(ai_results_json)
+    ielts = (checker or {}).get('ielts')
+    if ielts:
+        task_label = ielts_report.TASKS[ielts['task']]['label']
+        text_kind = 'IELTS ' + task_label
+        checked_with = 'IELTS writing checker (%s)' % task_label
+    else:
+        text_kind = 'essay'
+        checked_with = 'essay checker' if checker else 'not checked'
 
     _ensure_submissions_table()
     conn, cursor = app_services.open_db()
@@ -1136,18 +1369,20 @@ def improve_human_submit():
                 status,
                 requester_name,
                 requester_email,
-                requester_phone
+                requester_phone,
+                reviewer_note
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             submission_id,
-            'human_only',
+            'after_ai' if checker else 'human_only',
             instructions,
-            None,
+            json.dumps(checker, indent=2) if checker else None,
             'new',
             full_name,
             requester_email,
-            requester_phone or None
+            requester_phone or None,
+            reviewer_note or None
         ))
         conn.commit()
     finally:
@@ -1156,8 +1391,8 @@ def improve_human_submit():
     conn, cursor = app_services.open_db()
     try:
         cursor.execute('''
-            INSERT INTO essay_submissions 
-            (submission_id, first_name, last_name, email, phone, essay_type, academic_level, 
+            INSERT INTO essay_submissions
+            (submission_id, first_name, last_name, email, phone, essay_type, academic_level,
              subject, pages, deadline, topic, instructions, citation_style, file_path, file_name, file_size)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
@@ -1168,10 +1403,13 @@ def improve_human_submit():
             requester_phone or None,
             'Editing',
             'Other',
-            'Writing correction',
+            'IELTS Writing' if ielts else 'Writing correction',
             str(pages),
-            deadline,
-            'Human correction request',
+            # This form does not ask for a deadline; students can give one in
+            # their note. Storing the submission time here made every request
+            # look due immediately.
+            'Not specified',
+            'Human review request: ' + text_kind,
             instructions,
             'N/A',
             None,
@@ -1183,30 +1421,17 @@ def improve_human_submit():
         conn.close()
 
     admin_recipient = app_services.admin_email() or app_services.contact_recipient()
+    phone_text = ('phone ' + requester_phone) if requester_phone else 'phone not given'
     admin_body_lines = [
-        "New essay submission received.",
         f"Submission ID: {submission_id}",
-        f"Name: {full_name}",
-        f"Email: {requester_email}",
-        f"Phone: {requester_phone or 'N/A'}",
-        "Essay Type: Editing",
-        "Academic Level: Other",
-        "Subject: Writing correction",
-        f"Pages: {pages}",
-        f"Deadline: {deadline}",
-        "Topic: Human correction request",
-        "Citation Style: N/A",
-        "Writer Preference: N/A",
-        "Required Sources: N/A",
-        "Newsletter Opt-in: No",
-        "File Uploaded: No file",
-        "",
-        "Instructions:",
-        instructions or 'None provided'
-    ]
+        f"From: {full_name} <{requester_email}>, {phone_text}",
+    ] + _format_checker_summary(checker)
+    if reviewer_note:
+        admin_body_lines += ["", "Note from the student:", reviewer_note]
+    admin_body_lines += ["", f"Student's text ({word_count} words):", instructions]
     admin_ok, admin_err = app_services.send_email(
         to_email=admin_recipient,
-        subject="New submission received",
+        subject=f"Human review request: {text_kind} ({word_count} words)",
         body="\n".join(admin_body_lines),
         reply_to=requester_email
     )
@@ -1218,21 +1443,23 @@ def improve_human_submit():
             requester_name=full_name,
             requester_email=requester_email,
             requester_phone=requester_phone,
+            ai_results_json=ai_results_json,
+            reviewer_note=reviewer_note,
             error=admin_err or "Unable to send confirmation emails right now. Please try again shortly."
         )
 
     student_ok, student_err = app_services.send_email(
         to_email=requester_email,
-        subject=f"Submission received: {submission_id}",
+        subject=f"Review request received: {submission_id}",
         body=(
             f"Hello {full_name},\n\n"
-            f"We've received your request (ID: {submission_id}).\n"
-            "Current status: pending. We'll email you when the status changes.\n\n"
+            f"We've received your review request (ID: {submission_id}).\n\n"
+            "What happens next: we'll read it and email you to confirm we can take it. "
+            "Nothing is charged before then, and you only pay after you have seen a "
+            "summary of the finished review.\n\n"
             "Summary:\n"
-            "- Type: Editing\n"
-            "- Subject: Writing correction\n"
-            f"- Pages: {pages}\n"
-            f"- Deadline: {deadline}\n\n"
+            f"- Text: {word_count} words\n"
+            f"- Checked with: {checked_with}\n\n"
             "Thank you,\nEnglish Essay Writing Team"
         ),
         reply_to=app_services.admin_email() or app_services.from_email()
@@ -1258,7 +1485,7 @@ def admin_submissions():
     conn, cursor = app_services.open_db()
     cursor.execute('''
         SELECT id, submission_id, created_at, mode, extracted_text, ai_results_json, status,
-               requester_name, requester_email, requester_phone
+               requester_name, requester_email, requester_phone, reviewer_note
         FROM submissions
         ORDER BY created_at DESC
     ''')
@@ -1277,7 +1504,9 @@ def admin_submissions():
             'status': row[6],
             'requester_name': row[7],
             'requester_email': row[8],
-            'requester_phone': row[9]
+            'requester_phone': row[9],
+            'reviewer_note': row[10],
+            'checker_text': _checker_text_for_admin(row[5])
         })
     return render_template('admin_submissions.html', submissions=submissions)
 
@@ -1325,6 +1554,17 @@ def improve_status(job_id):
         payload['result_url'] = url_for('improve_result', job_id=job_id)
     return jsonify(payload)
 
+def _start_over_url(result_json):
+    """IELTS students go back to the IELTS page, everyone else to /improve."""
+    try:
+        report = (json.loads(result_json or '{}') or {}).get('ielts')
+    except (TypeError, ValueError, AttributeError):
+        report = None
+    if report:
+        return '/ielts-writing-checker?task=' + (report.get('task') or ielts_report.DEFAULT_TASK)
+    return '/improve'
+
+
 def improve_result(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = app_services.open_db()
@@ -1365,6 +1605,7 @@ def improve_result(job_id):
         result_html=result_html,
         ai_results_json=result_json or '',
         extracted_text=extracted_text or '',
-        warning=warning
+        warning=warning,
+        start_over_url=_start_over_url(result_json)
     )
 

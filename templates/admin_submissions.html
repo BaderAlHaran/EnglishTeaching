@@ -183,7 +183,7 @@
                         <td data-label="Created">{{ sub.created_at }}</td>
                         <td data-label="Mode">
                             {% if sub.mode == 'after_ai' %}
-                                <span class="badge badge-ai">After AI</span>
+                                <span class="badge badge-ai">From checker</span>
                             {% else %}
                                 <span class="badge badge-human">Human Only</span>
                             {% endif %}
@@ -209,7 +209,14 @@
                                     {% endif %}
                                 {% endif %}
                                 <pre>{{ sub.extracted_text|e }}</pre>
-                                {% if sub.ai_results_json %}
+                                {% if sub.reviewer_note %}
+                                    <div class="page-subtitle" style="margin-top: 8px;">Note from the student</div>
+                                    <pre>{{ sub.reviewer_note|e }}</pre>
+                                {% endif %}
+                                {% if sub.checker_text %}
+                                    <div class="page-subtitle" style="margin-top: 8px;">Checker results</div>
+                                    <pre>{{ sub.checker_text|e }}</pre>
+                                {% elif sub.ai_results_json %}
                                     <div class="page-subtitle" style="margin-top: 8px;">AI Results</div>
                                     <pre>{{ sub.ai_results_json|e }}</pre>
                                 {% endif %}

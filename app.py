@@ -609,7 +609,7 @@ def sitemap_xml():
     """Simple dynamic sitemap covering key pages"""
     base = request.url_root.rstrip('/')
     urls = [
-        "/", "/improve", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/refunds", "/faq"
+        "/", "/improve", "/ielts-writing-checker", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/refunds", "/faq"
     ]
     items = "\n".join(
         f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
@@ -1042,6 +1042,11 @@ def _build_highlighted_html(text, issues):
 @app.route('/improve', methods=['GET'])
 def improve():
     return improve_routes.improve()
+
+
+@app.route('/ielts-writing-checker', methods=['GET'])
+def ielts_writing_checker():
+    return improve_routes.ielts_page()
 
 
 @app.route('/improve/ai', methods=['POST'])

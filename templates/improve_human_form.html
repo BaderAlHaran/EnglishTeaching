@@ -110,6 +110,7 @@
                 {% endif %}
                 <form action="/improve/human/submit" method="post" id="improveHumanForm">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <textarea name="ai_results_json" hidden aria-hidden="true">{{ ai_results_json|default('', true)|e }}</textarea>
                     <div class="form__group" style="display:none;" aria-hidden="true">
                         <label for="website">Website</label>
                         <input type="text" id="website" name="website" autocomplete="off" tabindex="-1">
@@ -141,6 +142,10 @@
                             <label class="form__label" for="requester-text">Your Draft</label>
                             <textarea class="form__textarea" id="requester-text" name="instructions" rows="8">{{ extracted_text|default('', true)|e }}</textarea>
                             <p class="human-note">You can edit the draft before submitting.</p>
+                        </div>
+                        <div class="form__group">
+                            <label class="form__label" for="reviewer-note">Note for the reviewer (optional)</label>
+                            <textarea class="form__textarea" id="reviewer-note" name="reviewer_note" rows="3" maxlength="1000" placeholder="For example: I keep getting 6.0 for Coherence and Cohesion, or: my deadline is Friday.">{{ reviewer_note|default('', true)|e }}</textarea>
                         </div>
                     </div>
                     
