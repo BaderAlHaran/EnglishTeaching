@@ -18,3 +18,11 @@ def test_homepage_ielts_card_links_to_the_checker(client):
     body = client.get("/").data.decode("utf-8")
     card = body.split("IELTS &amp; TOEFL Writing Feedback", 1)[1].split('class="service__item"', 1)[0]
     assert 'href="/ielts-writing-checker"' in card
+
+
+def test_homepage_hero_signposts_ielts_without_a_third_button(client):
+    body = client.get("/").data.decode("utf-8")
+    hero = body.split('class="hero__visual"', 1)[0]
+    assert 'href="/ielts-writing-checker"' in hero
+    assert "Preparing for IELTS?" in hero
+    assert hero.count("hero__cta") == 2
