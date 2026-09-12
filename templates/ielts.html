@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Free IELTS Writing Checker for Task 1 and Task 2 | EnglishEssayWriting.net</title>
-    <meta name="description" content="Check an IELTS Writing Task 1 or Task 2 answer for free. See your word count against the minimum, your paragraphing, the Task 1 overview, contractions, informal words and grammar. No sign-up.">
+    <meta name="description" content="Check an IELTS Writing Task 1 or Task 2 answer for free. See your word count against the minimum, your paragraphing, the Task 1 overview, contractions, informal words and grammar. No sign-up, and your answer is never published.">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,13 +22,13 @@
     <link rel="alternate icon" href="/favicon.ico">
     <link rel="canonical" href="https://englishessaywriting.net/ielts-writing-checker">
     <meta property="og:title" content="Free IELTS Writing Checker for Task 1 and Task 2">
-    <meta property="og:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up.">
+    <meta property="og:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up, and never published.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://englishessaywriting.net/ielts-writing-checker">
     <meta property="og:image" content="https://englishessaywriting.net/logo.svg">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Free IELTS Writing Checker for Task 1 and Task 2">
-    <meta name="twitter:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up.">
+    <meta name="twitter:description" content="Check your IELTS Writing answer for word count, paragraphing, formal language and grammar. Free, no sign-up, and never published.">
     <meta name="robots" content="index, follow, max-image-preview:large">
 
     <!-- WebApplication Schema -->
@@ -67,6 +67,14 @@
           "acceptedAnswer": {
             "@type": "Answer",
             "text": "No. A reliable band score needs a trained examiner, or software tested against a large set of examiner-marked scripts. This checker sticks to what can be measured dependably: length, paragraphing, formal language, grammar and spelling. If you want a person to read your answer, you can request a human review for a flat $25."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will my answer be published?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Nothing you paste is published on this site, and there is no public library of essays. Your answer is used only to produce your feedback, and checks are deleted automatically after 30 days. Grammar checking uses the LanguageTool service, so the text is sent there for analysis, as explained in our privacy policy."
           }
         },
         {
@@ -276,6 +284,9 @@
         .improve-side .improve-card--soft:nth-child(3) {
             background: linear-gradient(180deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 1));
         }
+        .improve-side .improve-card--soft:nth-child(4) {
+            background: linear-gradient(180deg, rgba(109, 40, 217, 0.05), rgba(255, 255, 255, 1));
+        }
         .improve-hidden { display: none; }
 
         .ielts-fieldset {
@@ -354,6 +365,40 @@
             color: var(--text-secondary);
             font-weight: 500;
         }
+        .improve-grid > .improve-card {
+            /* Grid items default to min-width:auto, which lets the wide criteria
+               table stretch the page instead of scrolling inside its own box. */
+            min-width: 0;
+        }
+        .ielts-scroll {
+            overflow-x: auto;
+            max-width: 100%;
+            margin-top: var(--space-4);
+        }
+        .ielts-criteria {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--fs-sm);
+            min-width: 620px;
+        }
+        .ielts-criteria th,
+        .ielts-criteria td {
+            text-align: left;
+            vertical-align: top;
+            padding: var(--space-3) var(--space-4) var(--space-3) 0;
+            border-bottom: 1px solid var(--gray-200);
+            color: var(--text-secondary);
+        }
+        .ielts-criteria thead th {
+            color: var(--text-primary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--gray-300);
+        }
+        .ielts-criteria tbody th {
+            color: var(--text-primary);
+            font-weight: 600;
+            padding-right: var(--space-6);
+        }
         .ielts-faq h3 {
             margin-top: var(--space-6);
         }
@@ -364,10 +409,10 @@
             .improve-card .form__textarea { min-height: 260px; }
         }
         @media (max-width: 960px) {
-            .improve-grid { grid-template-columns: 1fr; }
+            .improve-grid { grid-template-columns: minmax(0, 1fr); }
         }
         @media (max-width: 600px) {
-            .ielts-tasks { grid-template-columns: 1fr; }
+            .ielts-tasks { grid-template-columns: minmax(0, 1fr); }
         }
     </style>
 </head>
@@ -408,7 +453,7 @@
         <div class="container">
             <h1 class="improve-hero__title">IELTS Writing Checker</h1>
             <p class="improve-hero__description">Check your IELTS Task 1 or Task 2 answer before test day. It counts your words against the minimum, checks your paragraphs and flags anything too informal for the exam.</p>
-            <p class="improve-hero__note">No sign-up needed. It does not give a band score.</p>
+            <p class="improve-hero__note">Your answer is never published. No sign-up, no account.</p>
         </div>
     </section>
 
@@ -502,6 +547,15 @@ To sum up, I think children should start formal lessons at around six. Before th
                         <p class="improve-tip" style="margin-top: var(--space-3);">You get 60 minutes for both tasks. Task 2 counts for twice as much as Task 1, so it deserves the extra time.</p>
                     </div>
                     <div class="improve-card improve-card--soft">
+                        <h2 class="improve-side__title">Your answer stays private</h2>
+                        <ul class="improve-checklist">
+                            <li>Nothing you paste is published on this site, and there is no public library of essays</li>
+                            <li>No sign-up and no account</li>
+                            <li>Checks are deleted automatically after 30 days</li>
+                        </ul>
+                        <p class="improve-tip" style="margin-top: var(--space-3);">Grammar checking uses LanguageTool, so your text is sent to that service for analysis. Our <a href="/privacy">privacy policy</a> explains what happens to it.</p>
+                    </div>
+                    <div class="improve-card improve-card--soft">
                         <h2 class="improve-side__title">What it can't do</h2>
                         <p class="improve-tip">It can't tell whether you answered the question, how well you developed your ideas, or what band you would get. That takes a person reading your answer.</p>
                         <p class="improve-tip" style="margin-top: var(--space-2);">You can <a href="/essay-form">request a human review</a> for a flat $25. General Training letters are not supported yet.</p>
@@ -509,11 +563,54 @@ To sum up, I think children should start formal lessons at around six. Before th
                 </div>
             </div>
 
-            <div class="improve-grid" style="margin-top: var(--space-12); grid-template-columns: 1fr;">
+            <div class="improve-grid" style="margin-top: var(--space-12); grid-template-columns: minmax(0, 1fr);">
+                <div class="improve-card">
+                    <h2 class="improve-card__title">Why there is no band score</h2>
+                    <p class="improve-tip">Examiners mark IELTS Writing on four criteria, each worth a quarter of your band. This checker measures the parts that can be measured the same way every time. The rest needs a person who reads your answer.</p>
+                    <div class="ielts-scroll">
+                        <table class="ielts-criteria">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Examiners mark</th>
+                                    <th scope="col">What this checker measures</th>
+                                    <th scope="col">What needs a person</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th scope="row">Task Response</th>
+                                    <td>Word count against the minimum, wording copied from the question, an overview and opinions in Task 1</td>
+                                    <td>Whether you answered the question and developed your ideas</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Coherence and Cohesion</th>
+                                    <td>Paragraph count, a concluding paragraph, linking words at the start of paragraphs</td>
+                                    <td>Whether your argument flows and your ideas connect</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Lexical Resource</th>
+                                    <td>Contractions, informal words, overused phrases, repeated words, spelling</td>
+                                    <td>The range and precision of your vocabulary</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Grammatical Range and Accuracy</th>
+                                    <td>Grammar and punctuation mistakes</td>
+                                    <td>The variety of your sentence structures</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="improve-tip" style="margin-top: var(--space-4);">A band score needs a trained examiner, or software tested against thousands of examiner-marked scripts. Students often get very different numbers from different tools for the same essay, so we would rather show you what is certain and leave the band to the examiner. If you want a judgement on the parts a computer cannot measure, a real person can <a href="/essay-form">read your answer</a> for a flat $25.</p>
+                </div>
+            </div>
+
+            <div class="improve-grid" style="margin-top: var(--space-12); grid-template-columns: minmax(0, 1fr);">
                 <div class="improve-card ielts-faq">
                     <h2 class="improve-card__title">Frequently asked questions</h2>
                     <h3 class="improve-side__title">Does the IELTS writing checker give a band score?</h3>
                     <p class="improve-tip">No. A reliable band score needs a trained examiner, or software tested against a large set of examiner-marked scripts. This checker sticks to what can be measured dependably: length, paragraphing, formal language, grammar and spelling. If you want a person to read your answer, you can request a human review for a flat $25.</p>
+                    <h3 class="improve-side__title">Will my answer be published?</h3>
+                    <p class="improve-tip">No. Nothing you paste is published on this site, and there is no public library of essays. Your answer is used only to produce your feedback, and checks are deleted automatically after 30 days. Grammar checking uses the LanguageTool service, so the text is sent there for analysis, as explained in our <a href="/privacy">privacy policy</a>.</p>
                     <h3 class="improve-side__title">Do words copied from the question count towards the word count?</h3>
                     <p class="improve-tip">No. Examiners do not count wording copied directly from the question, so an answer that looks long enough can still fall short. Paste the question into the question box and the checker shows how many of your words are copied and how many count.</p>
                     <h3 class="improve-side__title">Is there a maximum word count in IELTS Writing?</h3>

@@ -505,6 +505,9 @@ def require_login(f):
 # Initialize database
 init_database()
 
+# Checked essays are only needed while the student reads their results.
+CHECKER_TEXT_RETENTION_DAYS = int(os.environ.get('CHECKER_TEXT_RETENTION_DAYS', '30'))
+
 _cleanup_lock = threading.Lock()
 _last_cleanup_checked = None
 
@@ -523,6 +526,17 @@ def _run_cleanup_if_needed():
 
         cutoff_date = (datetime.now().date() - timedelta(days=180)).isoformat()
         cursor.execute('DELETE FROM visits WHERE visit_date < ?', (cutoff_date,))
+        conn.commit()
+
+        checker_cutoff = (datetime.now() - timedelta(days=CHECKER_TEXT_RETENTION_DAYS)
+                          ).strftime('%Y-%m-%d %H:%M:%S')
+        try:
+            cursor.execute('DELETE FROM improve_jobs WHERE created_at < ?', (checker_cutoff,))
+            conn.commit()
+        except Exception:
+            # improve_jobs is created on first use; nothing to clean before then.
+            conn.rollback()
+            app.logger.info('Skipped checker cleanup; improve_jobs not ready')
 
         if _is_postgres():
             cursor.execute('''
