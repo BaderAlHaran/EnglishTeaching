@@ -786,6 +786,64 @@ def improve():
         **_improve_context()
     )
 
+def _ensure_checker_runs_table():
+    """One row per check: when it ran and which checker it was, with no essay
+    text. Kept permanently, so the counts survive the 30-day deletion of the
+    checks in improve_jobs."""
+    conn, cursor = app_services.open_db()
+    try:
+        if app_services.is_postgres():
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS checker_runs (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    exam TEXT NOT NULL,
+                    task TEXT
+                )
+            """)
+        else:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS checker_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    exam TEXT NOT NULL,
+                    task TEXT
+                )
+            """)
+        conn.commit()
+        cursor.execute('SELECT COUNT(*) FROM checker_runs')
+        if cursor.fetchone()[0] == 0:
+            # First time: carry over the history still sitting in improve_jobs
+            # before old checks start being deleted.
+            try:
+                cursor.execute("""
+                    INSERT INTO checker_runs (created_at, exam)
+                    SELECT created_at,
+                           CASE WHEN result_json LIKE '%"ielts"%' THEN 'ielts' ELSE 'essay' END
+                    FROM improve_jobs
+                """)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+    finally:
+        conn.close()
+
+
+def _record_checker_run(ielts=None):
+    """Count one check for the admin analytics. Never blocks the student."""
+    try:
+        _ensure_checker_runs_table()
+        conn, cursor = app_services.open_db()
+        try:
+            cursor.execute('INSERT INTO checker_runs (exam, task) VALUES (?, ?)',
+                           ('ielts' if ielts else 'essay', (ielts or {}).get('task')))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        app_services.logger().exception("Could not record checker run")
+
+
 def _render_input_page(error=None, prefill_text='', ielts=None):
     """Re-show whichever form the student came from, keeping their text."""
     if ielts is not None:
@@ -871,6 +929,9 @@ def improve_ai():
         if language not in IMPROVE_LANGUAGES:
             language = 'en-US'
 
+        # Counted before the job row exists, so the one-time backfill in
+        # _ensure_checker_runs_table cannot count this check twice.
+        _record_checker_run(ielts)
         job_id = _create_improve_job(extracted_text, warning)
         threading.Thread(
             target=_process_improve_job,

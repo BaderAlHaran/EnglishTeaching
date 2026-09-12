@@ -172,6 +172,11 @@ def admin_analytics():
     yesterday = today - timedelta(days=1)
     start_date = today - timedelta(days=6)
 
+    try:
+        improve_routes._ensure_checker_runs_table()
+    except Exception:
+        pass
+
     conn, cursor = app_services.open_db()
     cursor.execute('''
         SELECT visit_date, COUNT(*)
@@ -209,21 +214,29 @@ def admin_analytics():
     # Checker usage and human-review submissions; these tables are created
     # lazily, so they may not exist yet on a fresh database.
     date_expr = 'CAST(created_at AS DATE)' if app_services.is_postgres() else 'date(created_at)'
+    # Counts come from checker_runs, which keeps only a date and which checker
+    # ran, so they are not affected when old checks are deleted.
     checker_by_date = {}
+    ielts_by_date = {}
     checker_total = 0
+    ielts_total = 0
     try:
         cursor.execute(f'''
-            SELECT {date_expr}, COUNT(*)
-            FROM improve_jobs
+            SELECT {date_expr}, exam, COUNT(*)
+            FROM checker_runs
             WHERE {date_expr} >= ?
-            GROUP BY {date_expr}
+            GROUP BY {date_expr}, exam
         ''', (start_date.isoformat(),))
         for row in cursor.fetchall():
             date_value = row[0]
             date_key = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
-            checker_by_date[date_key] = row[1]
-        cursor.execute('SELECT COUNT(*) FROM improve_jobs')
+            checker_by_date[date_key] = checker_by_date.get(date_key, 0) + row[2]
+            if row[1] == 'ielts':
+                ielts_by_date[date_key] = ielts_by_date.get(date_key, 0) + row[2]
+        cursor.execute('SELECT COUNT(*) FROM checker_runs')
         checker_total = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM checker_runs WHERE exam = ?', ('ielts',))
+        ielts_total = cursor.fetchone()[0]
     except Exception:
         pass
 
@@ -254,6 +267,7 @@ def admin_analytics():
             'date': day_key,
             'count': counts_by_date.get(day_key, 0),
             'checker_runs': checker_by_date.get(day_key, 0),
+            'ielts_runs': ielts_by_date.get(day_key, 0),
             'reviews': review_by_date.get(day_key, 0)
         })
 
@@ -269,6 +283,8 @@ def admin_analytics():
         top_countries=top_countries,
         checker_today=checker_by_date.get(today.isoformat(), 0),
         checker_total=checker_total,
+        ielts_today=ielts_by_date.get(today.isoformat(), 0),
+        ielts_total=ielts_total,
         review_total=review_total,
     )
 
