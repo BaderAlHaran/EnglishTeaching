@@ -618,15 +618,37 @@ def robots_txt():
     content = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
     return (content, 200, {'Content-Type': 'text/plain; charset=utf-8'})
 
+# Each page's lastmod comes from the file it is served from, so the sitemap
+# stays honest without anyone remembering to edit dates by hand.
+SITEMAP_PAGES = {
+    "/": "index.html",
+    "/improve": "templates/improve.html",
+    "/ielts-writing-checker": "templates/ielts.html",
+    "/free-essay-writing-help": "free-essay-writing-help.html",
+    "/essay-form": "essay-form.html",
+    "/about": "about.html",
+    "/contact": "contact.html",
+    "/terms": "terms.html",
+    "/privacy": "privacy.html",
+    "/refunds": "refunds.html",
+    "/faq": "faq.html",
+}
+
+
+def _page_last_modified(filename):
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(filename)).date().isoformat()
+    except OSError:
+        return datetime.now().date().isoformat()
+
+
 @app.route('/sitemap.xml')
 def sitemap_xml():
-    """Simple dynamic sitemap covering key pages"""
+    """Dynamic sitemap covering key pages, with a lastmod per page"""
     base = request.url_root.rstrip('/')
-    urls = [
-        "/", "/improve", "/ielts-writing-checker", "/free-essay-writing-help", "/essay-form", "/about", "/contact", "/terms", "/privacy", "/refunds", "/faq"
-    ]
     items = "\n".join(
-        f"  <url>\n    <loc>{base}{path}</loc>\n  </url>" for path in urls
+        f"  <url>\n    <loc>{base}{path}</loc>\n    <lastmod>{_page_last_modified(filename)}</lastmod>\n  </url>"
+        for path, filename in SITEMAP_PAGES.items()
     )
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'

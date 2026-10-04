@@ -53,6 +53,10 @@ def test_ielts_and_essay_runs_are_counted_separately(client, app_module, monkeyp
 
 
 def test_counts_survive_the_30_day_cleanup(client, app_module, monkeypatch):
+    # Mark the once-a-day cleanup as already done, so it does not also run in a
+    # background thread and race this test's own call for the sqlite file.
+    monkeypatch.setattr(app_module, "_last_cleanup_checked",
+                        app_module.datetime.now().date().isoformat())
     run_check(client, app_module, monkeypatch,
               {"text": "The chart shows sales.", "exam": "ielts", "task": "task2"})
     routes = app_module.improve_routes
