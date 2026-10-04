@@ -19,7 +19,8 @@ def test_empty_text_returns_none():
 def test_report_has_all_categories():
     report = mechanics_report.build_report(SAMPLE)
     assert set(report.keys()) == {"sentenceClarity", "repetitionVariety", "academicStyle",
-                                  "structuralSignals", "readability"}
+                                  "concision", "spellingConsistency", "structuralSignals",
+                                  "readability", "highlights"}
 
 
 def test_long_sentence_detected():

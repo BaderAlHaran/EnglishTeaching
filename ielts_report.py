@@ -64,6 +64,19 @@ OVERUSED_PHRASES = [
     'every coin has two sides', 'it is undeniable that', 'it cannot be denied that',
 ]
 
+# Sentences lifted from coaching templates. Examiners are trained to
+# discount memorised language, so it earns nothing.
+MEMORISED_PHRASES = [
+    'this essay will discuss', 'this essay will look at', 'in this essay i will',
+    'i am going to discuss', 'it is often said that', 'it is often argued that',
+    'as far as i am concerned', 'i will discuss both views',
+    'there are both advantages and disadvantages',
+]
+
+# Academic Task 1 has to quote the figures it describes.
+NUMBER_RE = re.compile(r'\b\d+(?:[.,]\d+)?\s*(?:%|per cent|percent)?\b', re.IGNORECASE)
+TASK1_MIN_FIGURES = 3
+
 OPINION_RE = re.compile(
     r"\b(?:I (?:think|believe|feel|agree|disagree)|in my (?:opinion|view)|personally)\b",
     re.IGNORECASE,
@@ -92,6 +105,8 @@ MSG_OPINION = 'Task 1 asks you to describe the information, not give your opinio
 MSG_OVERUSED = 'One of the most overused phrases in IELTS answers. Say it plainly or cut it.'
 MSG_NOWADAYS = ('Starting with "Nowadays" is one of the most common IELTS openings. '
                 'Try opening with the topic itself.')
+MSG_MEMORISED = ('Memorised template sentence. Examiners discount these, so put it in '
+                 'your own words.')
 MSG_COPIED = "Copied from the question. Examiners don't count copied words, so put this in your own words."
 
 
@@ -102,6 +117,7 @@ def _phrase_re(phrase):
 
 _INFORMAL_RES = [(_phrase_re(phrase), suggestions) for phrase, suggestions in INFORMAL_PHRASES]
 _OVERUSED_RES = [_phrase_re(phrase) for phrase in OVERUSED_PHRASES]
+_MEMORISED_RES = [_phrase_re(phrase) for phrase in MEMORISED_PHRASES]
 
 
 def _tokens(text):
@@ -281,6 +297,24 @@ def _overused_findings(text):
     return found
 
 
+def _memorised_findings(text):
+    found = []
+    for pattern in _MEMORISED_RES:
+        found += [_highlight(m.start(), m.end(), MSG_MEMORISED) for m in pattern.finditer(text)]
+    found.sort(key=lambda item: item['start'])
+    return found
+
+
+def _data_check(text):
+    """Academic Task 1 answers have to support the description with figures."""
+    figures = len(NUMBER_RE.findall(text))
+    if figures >= TASK1_MIN_FIGURES:
+        return _check('pass', 'Data', '%s quoted from the chart.' % _plural(figures, 'figure'))
+    return _check('warn', 'Data', '%s quoted. Academic Task 1 asks you to support the description '
+                  'with data from the chart, so include the numbers that matter.'
+                  % _plural(figures, 'figure'))
+
+
 def build_report(text, task=DEFAULT_TASK, question=None):
     """Checklist and highlights for one IELTS answer, or None for empty text.
 
@@ -309,6 +343,7 @@ def build_report(text, task=DEFAULT_TASK, question=None):
     opinions = []
     if task == 'task1':
         checks.append(_overview_check(text))
+        checks.append(_data_check(text))
         opinions = [_highlight(m.start(), m.end(), MSG_OPINION) for m in OPINION_RE.finditer(text)]
         if opinions:
             checks.append(_check('warn', 'Opinions', '%s found. Task 1 asks you to describe the '
@@ -324,6 +359,14 @@ def build_report(text, task=DEFAULT_TASK, question=None):
                              '%s. They are highlighted in your text.' % _join(register_parts)))
     else:
         checks.append(_check('pass', 'Formal language', 'No contractions or informal words found.'))
+
+    memorised = _memorised_findings(text)
+    if memorised:
+        checks.append(_check('warn', 'Template language', '%s. Examiners discount memorised '
+                             'sentences, so they add nothing to your band.'
+                             % _plural(len(memorised), 'memorised phrase')))
+    else:
+        checks.append(_check('pass', 'Template language', 'No memorised template sentences.'))
 
     overused = _overused_findings(text)
     if overused:
@@ -345,7 +388,8 @@ def build_report(text, task=DEFAULT_TASK, question=None):
 
     # Order matters: when two highlights overlap, the earlier one wins, so the
     # short, fixable findings come before long copied spans.
-    highlights = register + opinions + overused + [_highlight(s, e, MSG_COPIED) for s, e in copied_spans]
+    highlights = (register + opinions + memorised + overused
+                  + [_highlight(s, e, MSG_COPIED) for s, e in copied_spans])
 
     return {
         'task': task,

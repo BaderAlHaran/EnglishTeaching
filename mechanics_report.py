@@ -56,6 +56,98 @@ NOMINALIZATIONS = {
     'realization': 'realize', 'recognition': 'recognise', 'contribution': 'contribute',
 }
 
+# Padding that says nothing. Each maps to the shorter wording, or to an empty
+# string when the phrase is simply filler and can go.
+WORDY_PHRASES = {
+    'due to the fact that': 'because',
+    'owing to the fact that': 'because',
+    'in spite of the fact that': 'although',
+    'despite the fact that': 'although',
+    'in the event that': 'if',
+    'for the purpose of': 'to',
+    'in order to': 'to',
+    'with regard to': 'about',
+    'with reference to': 'about',
+    'in relation to': 'about',
+    'at this point in time': 'now',
+    'at the present time': 'now',
+    'in the near future': 'soon',
+    'on a daily basis': 'daily',
+    'on a regular basis': 'regularly',
+    'in a timely manner': 'promptly',
+    'a large number of': 'many',
+    'a small number of': 'a few',
+    'the majority of': 'most',
+    'are of the opinion that': 'believe',
+    'is of the opinion that': 'believes',
+    'has the ability to': 'can',
+    'have the ability to': 'can',
+    'is able to': 'can',
+    'are able to': 'can',
+    'in conjunction with': 'with',
+    'prior to': 'before',
+    'subsequent to': 'after',
+    'in close proximity to': 'near',
+    'each and every': 'every',
+    'first and foremost': 'first',
+    'in the final analysis': 'finally',
+    'it is important to note that': '',
+    'it should be noted that': '',
+    'needless to say': '',
+}
+
+# The other shape a buried verb takes: a weak verb plus a noun.
+VERB_NOUN_PHRASES = {
+    'make a decision': 'decide',
+    'makes a decision': 'decides',
+    'made a decision': 'decided',
+    'take into consideration': 'consider',
+    'give consideration to': 'consider',
+    'carry out an investigation': 'investigate',
+    'conduct an investigation': 'investigate',
+    'carry out research': 'research',
+    'perform an analysis': 'analyse',
+    'conduct an analysis': 'analyse',
+    'reach a conclusion': 'conclude',
+    'come to a conclusion': 'conclude',
+    'provide assistance': 'help',
+    'provide support for': 'support',
+    'make an improvement': 'improve',
+    'make improvements': 'improve',
+    'have an impact on': 'affect',
+    'has an impact on': 'affects',
+    'make a contribution to': 'contribute to',
+    'make a comparison': 'compare',
+    'give an explanation': 'explain',
+    'place emphasis on': 'emphasise',
+    'make use of': 'use',
+    'take action': 'act',
+}
+
+# Word pairs where British and American spellings differ. Only families with
+# no second meaning are listed, so "practice/practise" and "program/programme"
+# stay out of it. Mixing the two columns in one piece is the fault.
+SPELLING_VARIANTS = [
+    ('organise', 'organize'), ('organised', 'organized'), ('organisation', 'organization'),
+    ('realise', 'realize'), ('realised', 'realized'),
+    ('recognise', 'recognize'), ('recognised', 'recognized'),
+    ('analyse', 'analyze'), ('analysed', 'analyzed'),
+    ('emphasise', 'emphasize'), ('emphasised', 'emphasized'),
+    ('apologise', 'apologize'), ('apologised', 'apologized'),
+    ('colour', 'color'), ('colours', 'colors'), ('coloured', 'colored'),
+    ('behaviour', 'behavior'), ('favourite', 'favorite'), ('labour', 'labor'),
+    ('neighbour', 'neighbor'), ('neighbours', 'neighbors'), ('humour', 'humor'),
+    ('centre', 'center'), ('centres', 'centers'), ('theatre', 'theater'),
+    ('metre', 'meter'), ('metres', 'meters'), ('litre', 'liter'),
+    ('travelled', 'traveled'), ('travelling', 'traveling'),
+    ('defence', 'defense'), ('offence', 'offense'),
+]
+
+MSG_WORDY = 'Wordy. Shorter: "%s".'
+MSG_WORDY_CUT = 'Padding. This phrase adds nothing.'
+MSG_BURIED_PHRASE = 'Buried verb. "%s" says it in one word.'
+MSG_MIXED_SPELLING = 'Mixed spelling. You use "%s" elsewhere; keep one spelling throughout.'
+
 TO_BE_FORMS = {'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am'}
 
 # Above this share of "to be" verbs the prose reads as static.
@@ -122,6 +214,96 @@ def _lexical_diversity(words_lower):
     return round(sum(ratios) / len(ratios), 2)
 
 
+def _phrase_pattern(phrase):
+    return re.compile(r'\b' + r'\s+'.join(re.escape(part) for part in phrase.split()) + r'\b',
+                      re.IGNORECASE)
+
+
+_WORDY_PATTERNS = [(_phrase_pattern(p), p, s) for p, s in WORDY_PHRASES.items()]
+_VERB_NOUN_PATTERNS = [(_phrase_pattern(p), p, s) for p, s in VERB_NOUN_PHRASES.items()]
+
+
+def _keep_case(source, replacement):
+    if replacement and source[:1].isupper():
+        return replacement[:1].upper() + replacement[1:]
+    return replacement
+
+
+def _concision(text):
+    """Padding and buried verbs, with the shorter wording and character
+    offsets so the results page can offer a one-click fix."""
+    wordy, buried, highlights = [], [], []
+
+    def collect(patterns, bucket, message_for):
+        for pattern, phrase, shorter in patterns:
+            matches = list(pattern.finditer(text))
+            if not matches:
+                continue
+            bucket.append({'phrase': phrase, 'suggestion': shorter, 'count': len(matches)})
+            for match in matches:
+                replacement = _keep_case(match.group(0), shorter)
+                highlights.append({
+                    'start': match.start(),
+                    'end': match.end(),
+                    'message': message_for(shorter),
+                    'suggestions': [replacement] if replacement else [],
+                })
+
+    collect(_WORDY_PATTERNS, wordy,
+            lambda shorter: MSG_WORDY % shorter if shorter else MSG_WORDY_CUT)
+    collect(_VERB_NOUN_PATTERNS, buried, lambda shorter: MSG_BURIED_PHRASE % shorter)
+
+    wordy.sort(key=lambda item: -item['count'])
+    buried.sort(key=lambda item: -item['count'])
+    highlights.sort(key=lambda item: item['start'])
+
+    total = sum(item['count'] for item in wordy) + sum(item['count'] for item in buried)
+    if total:
+        examples = ', '.join('"%s"' % item['phrase'] for item in (wordy + buried)[:3])
+        summary = ('%d wordy phrase%s to tighten, for example %s.'
+                   % (total, 's' if total != 1 else '', examples))
+    else:
+        summary = 'No padding or buried verbs found.'
+
+    return {'wordyPhrases': wordy, 'buriedVerbPhrases': buried,
+            'summary': summary, 'highlights': highlights}
+
+
+def _spelling_consistency(text, language=None):
+    """British and American spellings mixed in one piece. Either spelling is
+    fine on its own, so this only speaks up when both appear."""
+    counts = {}
+    for word in _words(text):
+        lowered = word.lower()
+        counts[lowered] = counts.get(lowered, 0) + 1
+
+    prefer_british = (language or 'en-GB').lower() != 'en-us'
+    mixed, highlights = [], []
+    for british, american in SPELLING_VARIANTS:
+        if not (counts.get(british) and counts.get(american)):
+            continue
+        mixed.append({'british': british, 'american': american,
+                      'count': counts[british] + counts[american]})
+        odd_one_out, keep = (american, british) if prefer_british else (british, american)
+        for match in re.finditer(r'\b' + odd_one_out + r'\b', text, flags=re.IGNORECASE):
+            highlights.append({
+                'start': match.start(),
+                'end': match.end(),
+                'message': MSG_MIXED_SPELLING % keep,
+                'suggestions': [_keep_case(match.group(0), keep)],
+            })
+
+    if mixed:
+        pairs = ', '.join('"%s" and "%s"' % (m['british'], m['american']) for m in mixed[:3])
+        summary = ('Both British and American spellings appear: %s. Either is accepted, but keep '
+                   'one throughout.' % pairs)
+    else:
+        summary = 'Spelling is consistent.'
+
+    return {'variant': 'en-GB' if prefer_british else 'en-US', 'mixed': mixed,
+            'summary': summary, 'highlights': highlights}
+
+
 def _academic_style(text, sentences):
     """Wordiness patterns that weaken academic prose: buried verbs, empty
     sentence openers, and an over-reliance on forms of "to be"."""
@@ -150,8 +332,9 @@ def _academic_style(text, sentences):
         parts.append('%d buried verb%s: %s.'
                      % (len(found), 's' if len(found) != 1 else '', listed))
     if expletives:
-        parts.append('%d sentence%s open with "there is" or "it is".'
-                     % (expletives, 's' if expletives != 1 else ''))
+        parts.append('%d sentence%s %s with "there is" or "it is".'
+                     % (expletives, 's' if expletives != 1 else '',
+                        'open' if expletives != 1 else 'opens'))
     if to_be_percent > TO_BE_MAX_PERCENT:
         parts.append('Forms of "to be" make up %d%% of your words, above the %d%% guideline \u2014 '
                      'try stronger verbs.' % (to_be_percent, TO_BE_MAX_PERCENT))
@@ -341,6 +524,8 @@ def _readability(text, sentences):
 # weakness can sink the score, and the total is capped too: grammar and
 # spelling remain the primary signal.
 PENALTY_PER_NOMINALIZATION = 1.5
+PENALTY_PER_WORDY = 1.0
+PENALTY_MIXED_SPELLING = 2
 PENALTY_PER_EXPLETIVE = 1.5
 PENALTY_PER_TO_BE_POINT = 0.8
 PENALTY_PER_PASSIVE_POINT = 0.3
@@ -368,7 +553,17 @@ def style_penalty(report, word_count):
 
     breakdown = []
 
+    concision = report.get('concision') or {}
     noms = sum(item.get('count', 0) for item in (style.get('nominalisations') or []))
+    noms += sum(item.get('count', 0) for item in (concision.get('buriedVerbPhrases') or []))
+    wordy = sum(item.get('count', 0) for item in (concision.get('wordyPhrases') or []))
+    if wordy:
+        pts = capped(PENALTY_PER_WORDY * per_100(wordy))
+        breakdown.append(('wordy phrases', round(pts, 1)))
+
+    if (report.get('spellingConsistency') or {}).get('mixed'):
+        breakdown.append(('mixed spelling', PENALTY_MIXED_SPELLING))
+
     if noms:
         pts = capped(PENALTY_PER_NOMINALIZATION * per_100(noms))
         breakdown.append(('buried verbs', round(pts, 1)))
@@ -400,7 +595,7 @@ def style_penalty(report, word_count):
     return int(round(total)), breakdown
 
 
-def build_report(text, sentences=None, passive_sentence_ids=None, issues=None):
+def build_report(text, sentences=None, passive_sentence_ids=None, issues=None, language=None):
     """Build the mechanics report. All inputs beyond text are optional; when
     the caller has analysis results (sentence records, passive ids, issues)
     they are reused instead of re-deriving them."""
@@ -412,10 +607,18 @@ def build_report(text, sentences=None, passive_sentence_ids=None, issues=None):
     passive_sentence_ids = passive_sentence_ids or []
     issues = issues or []
 
+    concision = _concision(text)
+    spelling = _spelling_consistency(text, language)
+
     return {
         'sentenceClarity': _sentence_clarity(sentences, passive_sentence_ids, issues),
         'repetitionVariety': _repetition_variety(text),
         'academicStyle': _academic_style(text, sentences),
+        'concision': {k: v for k, v in concision.items() if k != 'highlights'},
+        'spellingConsistency': {k: v for k, v in spelling.items() if k != 'highlights'},
         'structuralSignals': _structural_signals(text, sentences),
-        'readability': _readability(text, sentences)
+        'readability': _readability(text, sentences),
+        # Offsets into the text, so these become clickable fixes in the results.
+        'highlights': sorted(concision['highlights'] + spelling['highlights'],
+                             key=lambda item: item['start']),
     }

@@ -411,6 +411,29 @@ def _build_mechanics_html(mechanics):
         style_details
     ))
 
+    concision = mechanics.get('concision') or {}
+    concision_items = (concision.get('wordyPhrases') or []) + (concision.get('buriedVerbPhrases') or [])
+    concision_details = [
+        ('"%s" -> "%s" (%dx)' % (item['phrase'], item['suggestion'], item['count'])
+         if item['suggestion'] else '"%s" can be cut (%dx)' % (item['phrase'], item['count']))
+        for item in concision_items
+    ]
+    parts.append(_card(
+        'Concision',
+        sum(item['count'] for item in concision_items),
+        concision.get('summary', ''),
+        concision_details
+    ))
+
+    spelling = mechanics.get('spellingConsistency') or {}
+    if spelling.get('mixed'):
+        parts.append(_card(
+            'Spelling Consistency',
+            len(spelling['mixed']),
+            spelling.get('summary', ''),
+            ['"%s" and "%s" both appear' % (m['british'], m['american']) for m in spelling['mixed']]
+        ))
+
     transition = structure.get('transitionOpenerPercent')
     parts.append(_card(
         'Structural Signals',
@@ -631,14 +654,18 @@ def _serialize_improve_json(ai_result):
     return payload.replace('<', '\\u003c')
 
 def _merge_ielts_highlights(ai_result):
-    """Add the IELTS findings (contractions, informal words, copied wording)
-    to the highlighted document, skipping any span another check already
-    marked so highlights never overlap."""
-    report = ai_result.get('ielts') or {}
+    """The IELTS findings: contractions, informal words, copied wording."""
+    _merge_highlights(ai_result, (ai_result.get('ielts') or {}).get('highlights'), 'ielts')
+
+
+def _merge_highlights(ai_result, highlights, prefix):
+    """Add findings that carry character offsets to the highlighted document,
+    skipping any span another check already marked so highlights never
+    overlap."""
     issues = list(ai_result.get('issues') or [])
     taken = [(i['start'], i['end']) for i in issues if not i.get('no_highlight')]
     added = 0
-    for item in report.get('highlights') or []:
+    for item in highlights or []:
         start, end = item['start'], item['end']
         if any(start < taken_end and taken_start < end for taken_start, taken_end in taken):
             continue
@@ -652,7 +679,7 @@ def _merge_ielts_highlights(ai_result):
             'sentence_id': None,
             'no_highlight': False,
             'is_rewrite': False,
-            'issue_id': f'ielts-{added}',
+            'issue_id': f'{prefix}-{added}',
         })
         taken.append((start, end))
     if not added:
@@ -700,8 +727,10 @@ def _process_improve_job(job_id, extracted_text, warning, language='en-GB', ielt
                     extracted_text,
                     sentences=ai_result.get('sentences'),
                     passive_sentence_ids=ai_result.get('passive_sentence_ids'),
-                    issues=ai_result.get('issues')
+                    issues=ai_result.get('issues'),
+                    language=language
                 )
+                _merge_highlights(ai_result, (ai_result['mechanics'] or {}).get('highlights'), 'style')
                 # Grammar alone can rate turgid prose highly, so deduct for the
                 # style weaknesses the mechanics report surfaces.
                 penalty, breakdown = mechanics_report.style_penalty(
