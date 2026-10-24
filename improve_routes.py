@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import jsonify, redirect, render_template, request, url_for
 from markupsafe import Markup, escape
@@ -27,6 +27,12 @@ REVIEWER_NOTE_MAX_CHARS = 1000
 # The browser posts the checker's result JSON back with a review request;
 # anything larger than this is not a genuine result, so it is ignored.
 CHECKER_JSON_MAX_CHARS = 2_000_000
+
+
+def _utcnow():
+    """Naive UTC timestamp. datetime.utcnow() is deprecated, and timestamps in
+    the database are naive, so keep the same shape instead of going aware."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _improve_context():
@@ -1147,7 +1153,7 @@ def improve_human():
     last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "Request"
     word_count = len(re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?", extracted_text))
     pages = max(1, int(math.ceil(word_count / 250))) if word_count else 1
-    deadline = datetime.utcnow().isoformat(timespec='minutes')
+    deadline = _utcnow().isoformat(timespec='minutes')
     essay_data = {
         'submission_id': submission_id,
         'first_name': first_name,
@@ -1639,7 +1645,7 @@ def improve_status(job_id):
             except Exception:
                 last_update = None
         if isinstance(last_update, datetime):
-            age = (datetime.utcnow() - last_update).total_seconds()
+            age = (_utcnow() - last_update).total_seconds()
             if age > 120:
                 stale_message = "The server restarted while processing. Please try again or use Human Review."
                 app_services.logger().info("Improve job %s marked stale after %ss", job_id, int(age))

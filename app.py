@@ -12,7 +12,7 @@ import mimetypes
 import uuid
 import json
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from werkzeug.utils import secure_filename
 import re
 import logging
@@ -69,11 +69,28 @@ if CUSTOM_DOMAIN:
     # Reconfigure CORS with custom domain
     CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
 
+def _utcnow():
+    """Naive UTC timestamp. datetime.utcnow() is deprecated, and timestamps in
+    the database are naive, so keep the same shape instead of going aware."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 # Force HTTPS in production
 @app.before_request
 def force_https():
     if not app.debug and request.headers.get('X-Forwarded-Proto') == 'http':
         return redirect(request.url.replace('http://', 'https://'), code=301)
+
+@app.before_request
+def redirect_trailing_slash():
+    """/improve/ used to return 404. Redirect instead, so a stray slash in a
+    link still lands on the page and only one URL is indexable."""
+    path = request.path
+    if request.method in ('GET', 'HEAD') and len(path) > 1 and path.endswith('/'):
+        target = path.rstrip('/') or '/'
+        if request.query_string:
+            target = '%s?%s' % (target, request.query_string.decode('latin-1'))
+        return redirect(target, code=301)
 
 @app.before_request
 def daily_cleanup_guard():
@@ -779,7 +796,7 @@ def _send_contact_email(sender_email: str, message_text: str):
     body = (
         f"You received a new contact form submission.\n\n"
         f"From: {sender_email}\n"
-        f"Time: {datetime.utcnow().isoformat()} UTC\n\n"
+        f"Time: {_utcnow().isoformat()} UTC\n\n"
         f"Message:\n{message_text}\n"
     )
 
