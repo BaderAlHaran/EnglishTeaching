@@ -59,19 +59,21 @@ def submit_essay():
                 file_size = os.path.getsize(file_path)
 
         conn, cursor = app_services.open_db()
-        cursor.execute('''
-            INSERT INTO essay_submissions
-            (submission_id, first_name, last_name, email, phone, essay_type, academic_level,
-             subject, pages, deadline, topic, instructions, citation_style, file_path, file_name, file_size)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            data['submission_id'], data['first_name'], data['last_name'], data['email'],
-            data['phone'], data['essay_type'], data['academic_level'], data['subject'],
-            data['pages'], data['deadline'], data['topic'], data['instructions'], data['citation_style'],
-            file_path, file_name, file_size
-        ))
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute('''
+                INSERT INTO essay_submissions
+                (submission_id, first_name, last_name, email, phone, essay_type, academic_level,
+                 subject, pages, deadline, topic, instructions, citation_style, file_path, file_name, file_size)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                data['submission_id'], data['first_name'], data['last_name'], data['email'],
+                data['phone'], data['essay_type'], data['academic_level'], data['subject'],
+                data['pages'], data['deadline'], data['topic'], data['instructions'],
+                data['citation_style'], file_path, file_name, file_size
+            ))
+            conn.commit()
+        finally:
+            conn.close()
 
         student_email = data['email']
         student_name = f"{data.get('first_name', '').strip()} {data.get('last_name', '').strip()}".strip()

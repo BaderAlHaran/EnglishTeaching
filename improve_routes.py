@@ -1582,14 +1582,16 @@ def improve_human_submit():
 def admin_submissions():
     _ensure_submissions_table()
     conn, cursor = app_services.open_db()
-    cursor.execute('''
-        SELECT id, submission_id, created_at, mode, extracted_text, ai_results_json, status,
-               requester_name, requester_email, requester_phone, reviewer_note
-        FROM submissions
-        ORDER BY created_at DESC
-    ''')
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor.execute('''
+            SELECT id, submission_id, created_at, mode, extracted_text, ai_results_json, status,
+                   requester_name, requester_email, requester_phone, reviewer_note
+            FROM submissions
+            ORDER BY created_at DESC
+        ''')
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
 
     submissions = []
     for row in rows:
@@ -1668,13 +1670,15 @@ def _start_over_url(result_json):
 def improve_result(job_id):
     _ensure_improve_jobs_table()
     conn, cursor = app_services.open_db()
-    cursor.execute('''
-        SELECT status, message, extracted_text, result_html, result_json, error, warning
-        FROM improve_jobs
-        WHERE job_id = ?
-    ''', (job_id,))
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        cursor.execute('''
+            SELECT status, message, extracted_text, result_html, result_json, error, warning
+            FROM improve_jobs
+            WHERE job_id = ?
+        ''', (job_id,))
+        row = cursor.fetchone()
+    finally:
+        conn.close()
     if not row:
         return render_template(
             'improve.html',

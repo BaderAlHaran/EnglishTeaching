@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory, make_response
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, send_file, send_from_directory, make_response, g, has_app_context
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -143,6 +143,9 @@ def set_security_headers(response):
         httponly=False,
         secure=not app.debug
     )
+    # Tell browsers to stay on HTTPS for a year, including subdomains.
+    response.headers.setdefault('Strict-Transport-Security',
+                                'max-age=31536000; includeSubDomains')
     response.headers.setdefault('X-Frame-Options', 'DENY')
     response.headers.setdefault('X-Content-Type-Options', 'nosniff')
     response.headers.setdefault('X-XSS-Protection', '1; mode=block')
@@ -238,9 +241,34 @@ class _CursorWrapper:
 def _get_cursor(conn):
     return _CursorWrapper(conn.cursor(), _is_postgres())
 
+def _track_connection(conn):
+    """Remember connections opened while serving a request, so one is never
+    left open when a handler returns or raises before closing it."""
+    if not has_app_context():
+        return
+    connections = getattr(g, '_open_connections', None)
+    if connections is None:
+        connections = []
+        g._open_connections = connections
+    connections.append(conn)
+
+
+@app.teardown_appcontext
+def _close_tracked_connections(exception=None):
+    """Safety net for the connection-closing every handler should do itself.
+    Closing an already-closed connection does nothing, so this is harmless
+    when the handler got it right."""
+    for conn in getattr(g, '_open_connections', None) or ():
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _open_db():
     """Return a connection and wrapped cursor for the configured database."""
     conn = _get_connection()
+    _track_connection(conn)
     return conn, _get_cursor(conn)
 
 def init_database():
