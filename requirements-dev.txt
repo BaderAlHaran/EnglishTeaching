@@ -1,0 +1,4 @@
+# Everything the site needs, plus the test tools. Render installs only
+# requirements.txt, so pytest no longer ships to production.
+-r requirements.txt
+pytest==9.2.0
