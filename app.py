@@ -44,30 +44,22 @@ if not app.debug:
     logging.basicConfig(level=logging.INFO)
     app.logger.setLevel(logging.INFO)
 
-# CORS configuration for production
-CORS(app, origins=[
-    "https://*.onrender.com",
-    "https://*.render.com", 
-    "http://localhost:5000",
-    "http://127.0.0.1:5000"
-], supports_credentials=True)
-
-
-
-# Add custom domain support
+# CORS: the site's own pages call its own endpoints, which needs no CORS at
+# all. Only the real domain is allowed, plus local dev servers outside
+# production. Wildcards such as *.onrender.com are deliberately left out: with
+# credentials allowed they would let any app hosted on Render make logged-in
+# requests to this one.
 CUSTOM_DOMAIN = os.environ.get('CUSTOM_DOMAIN')
+_cors_origins = []
 if CUSTOM_DOMAIN:
-    # Add custom domain to CORS origins
-    app.config['CORS_ORIGINS'] = [
-        f"https://{CUSTOM_DOMAIN}",
-        f"https://www.{CUSTOM_DOMAIN}",
-        "https://*.onrender.com",
-        "https://*.render.com", 
-        "http://localhost:5000",
-        "http://127.0.0.1:5000"
-    ]
-    # Reconfigure CORS with custom domain
-    CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
+    _cors_origins += [f"https://{CUSTOM_DOMAIN}", f"https://www.{CUSTOM_DOMAIN}"]
+if app.config['DEBUG']:
+    _cors_origins += ["http://localhost:5000", "http://127.0.0.1:5000"]
+app.config['CORS_ORIGINS'] = _cors_origins
+# always_send=False: only answer requests that actually come from another
+# origin. The default attached an allow-origin header to every response,
+# which is why plain requests used to get the dev address back.
+CORS(app, origins=_cors_origins, supports_credentials=True, always_send=False)
 
 def _utcnow():
     """Naive UTC timestamp. datetime.utcnow() is deprecated, and timestamps in

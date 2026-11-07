@@ -323,7 +323,9 @@ def run_local_analysis(text, progress_cb=None, timeout_seconds=20, start_time=No
                 sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
                 dict_loaded = False
                 try:
-                    with importlib_resources.path('symspellpy', 'frequency_dictionary_en_82_765.txt') as dict_path:
+                    dictionary = (importlib_resources.files('symspellpy')
+                                  / 'frequency_dictionary_en_82_765.txt')
+                    with importlib_resources.as_file(dictionary) as dict_path:
                         dict_loaded = sym_spell.load_dictionary(str(dict_path), 0, 1)
                 except Exception:
                     dict_loaded = False
